@@ -11,14 +11,14 @@
   </p>
   <p>
     <a href="https://github.com/vista-zhangg/codex-desktop-pet/releases/latest"><strong>下载 Windows 安装包</strong></a> ·
-    <a href="docs/releases/1.9.0.md">1.9.0 更新说明</a> ·
+    <a href="docs/releases/1.9.1.md">1.9.1 更新说明</a> ·
     <a href="docs/介绍.md">使用指南</a>
   </p>
 
   <p>
     <a href="https://github.com/vista-zhangg/codex-desktop-pet/actions/workflows/ci.yml"><img src="https://github.com/vista-zhangg/codex-desktop-pet/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/platform-Windows%20x64-0078D4?logo=windows" alt="Windows x64 only">
-    <img src="https://img.shields.io/badge/version-1.9.0-F6A04A" alt="Version 1.9.0">
+    <img src="https://img.shields.io/badge/version-1.9.1-F6A04A" alt="Version 1.9.1">
     <a href="LICENSE"><img src="https://img.shields.io/badge/code%20license-MIT-2EA44F" alt="MIT License"></a>
   </p>
 </div>
@@ -53,6 +53,8 @@ AgentPaw · AI 桌伴让你在桌面上查看 Codex 的任务进度、5h / 7d �
 ## 真实状态示例
 
 内置 **打工猫、奶茶鼠与小蜜蜂蜜蜜**，也支持自己的原创 IP。奶茶鼠创作者为 **阿翅 Achi**，官方账号为「奶茶鼠的想法（BOBARAT）」，见[奶茶鼠署名](assets/characters/milktea-mouse/CREDITS.md)。小蜜蜂蜜蜜创作者为 **花栗鼠发发（曾用名：花栗鼠 Toby）**，见[蜜蜜署名与出处](assets/characters/mimi-bee/CREDITS.md)。
+
+1.9.1 为奶茶鼠新增 69 张动图，现有 **84 张内置 GIF**，覆盖 16 个状态，并补齐睡觉、犯困和哈欠动作。每个状态仍可独立新增、替换或恢复默认。
 
 | 打工猫 · 工作中 | 奶茶鼠 · 工作中 | 小蜜蜂蜜蜜 · 打招呼 |
 | --- | --- | --- |

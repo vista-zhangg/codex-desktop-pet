@@ -11,14 +11,14 @@
   </p>
   <p>
     <a href="https://github.com/vista-zhangg/codex-desktop-pet/releases/latest"><strong>Download for Windows</strong></a> ·
-    <a href="docs/releases/1.9.0.md">1.9.0 release notes</a> ·
+    <a href="docs/releases/1.9.1.md">1.9.1 release notes</a> ·
     <a href="docs/介绍.md">User guide (中文)</a>
   </p>
 
   <p>
     <a href="https://github.com/vista-zhangg/codex-desktop-pet/actions/workflows/ci.yml"><img src="https://github.com/vista-zhangg/codex-desktop-pet/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/platform-Windows%20x64-0078D4?logo=windows" alt="Windows x64 only">
-    <img src="https://img.shields.io/badge/version-1.9.0-F6A04A" alt="Version 1.9.0">
+    <img src="https://img.shields.io/badge/version-1.9.1-F6A04A" alt="Version 1.9.1">
     <a href="LICENSE"><img src="https://img.shields.io/badge/code%20license-MIT-2EA44F" alt="MIT License"></a>
   </p>
 </div>
@@ -51,6 +51,8 @@ Keep Codex progress, 5h / 7d subscription quota, and token usage on your desktop
 ## Real state examples
 
 Built-in characters include **Salary Cat**, **Milk Tea Mouse (BOBARAT)** and **Mimi Bee (小蜜蜂蜜蜜)**. Milk Tea Mouse was created by **Achi (阿翅)**; the official account is **奶茶鼠的想法**. See [full attribution](assets/characters/milktea-mouse/CREDITS.md). Mimi Bee was created by **花栗鼠发发**, formerly known as **花栗鼠 Toby**; see [creator credits and sources](assets/characters/mimi-bee/CREDITS.md). Custom character packs use the same task states.
+
+Version 1.9.1 adds 69 Milk Tea Mouse animations for **84 built-in GIFs** across 16 states, including dedicated sleep, doze, and yawn animations. Each state remains independently editable.
 
 | Salary Cat · Working | Milk Tea Mouse · Working | Mimi Bee · Greeting |
 | --- | --- | --- |

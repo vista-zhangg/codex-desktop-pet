@@ -63,7 +63,7 @@ assert(readme.includes('assets/cat/CREDITS.md') && readmeEn.includes('assets/cat
   'README links must preserve original attribution in dedicated asset credits');
 assert(readme.includes('assets/characters/milktea-mouse/CREDITS.md') && readmeEn.includes('assets/characters/milktea-mouse/CREDITS.md'));
 assert(read('assets/characters/milktea-mouse/CREDITS.md').includes('阿翅 Achi'));
-assert.equal(fs.readdirSync(path.join(root, 'assets/characters/milktea-mouse')).filter((name) => name.endsWith('.gif')).length, 15);
+assert.equal(fs.readdirSync(path.join(root, 'assets/characters/milktea-mouse')).filter((name) => name.endsWith('.gif')).length, 84);
 assert(readme.includes('assets/characters/mimi-bee/CREDITS.md') && readmeEn.includes('assets/characters/mimi-bee/CREDITS.md'));
 assert(read('assets/characters/mimi-bee/CREDITS.md').includes('花栗鼠发发'));
 assert.equal(fs.readdirSync(path.join(root, 'assets/characters/mimi-bee')).filter((name) => name.endsWith('.gif')).length, 16);

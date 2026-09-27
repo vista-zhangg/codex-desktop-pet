@@ -102,6 +102,13 @@ async function main() {
     assert.equal(slow.busy, false);
     manager.select('milktea-mouse');
     const builtin = manager.catalog();
+    const normalizedMilk = Registry.normalizeCatalog(builtin);
+    assert.equal(normalizedMilk.slots.thinking.active[0].url, '../assets/characters/milktea-mouse/plus7-04.gif', 'thinking uses the focused pose');
+    assert(normalizedMilk.slots.thinking.active[0].name.includes('认真'));
+    const milkFiles = new Set(Object.values(normalizedMilk.slots).flatMap(slot => slot.active.map(asset => asset.url)));
+    assert.equal(milkFiles.size, 84, 'all existing and selected milk mouse GIFs remain usable after normalization');
+    assert.deepEqual(normalizedMilk.slots['ambient-sleep'].active.map(asset => asset.url.split('/').pop()),
+      ['plus3-16.gif', 'plus4-11.gif', 'plus5-11.gif'], 'rest uses sleeping, dozing and yawning animations');
     assert.equal(builtin.character.canDelete, false);
     assert.equal(builtin.character.removeBackground, false);
     assert.equal(builtin.characters.filter((c) => c.builtin).length, 3);
