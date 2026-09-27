@@ -9,6 +9,7 @@ AgentPaw · AI 桌伴是免费、非营利的个人开源项目，面向个人�
 | 打工猫 | 抖音博主 **@月薪喵**，原系列名「月薪喵」 | [原作者署名及素材出处](cat/CREDITS.md) |
 | 奶茶鼠 | **阿翅 Achi**；官方微博账号 **奶茶鼠的想法（BOBARAT）** | [官方账号](https://www.sina.cn/media/3181196492) · [来源说明](characters/milktea-mouse/CREDITS.md) |
 | 小蜜蜂蜜蜜 | **花栗鼠发发**，曾用名 **花栗鼠 Toby**；作者采访列出的微博名为 **花栗鼠Toby**，公众号为 **一箱花栗鼠** | [作者采访与账号出处](https://neocha.com/magazine/toby-cucumber/) · [来源说明](characters/mimi-bee/CREDITS.md) |
+| 线条小狗 | **Moonlab Studio（moonlab_studio）**；官方中文账号 **线条小狗Maltese**，Instagram **@moonlab_studio** | [官方账号导航](https://linktr.ee/moonlab_studio) · [来源与逐文件说明](characters/line-dog/CREDITS.md) |
 
 账号可能改名；历史账号名称按对应来源标注，以创作者实际主页信息为准。感谢原创作者的创作，请优先通过作者自己的账号了解和支持作品。
 

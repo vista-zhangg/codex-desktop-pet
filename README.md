@@ -11,14 +11,14 @@
   </p>
   <p>
     <a href="https://github.com/vista-zhangg/codex-desktop-pet/releases/latest"><strong>下载 Windows 安装包</strong></a> ·
-    <a href="docs/releases/1.9.1.md">1.9.1 更新说明</a> ·
+    <a href="docs/releases/1.9.2.md">1.9.2 更新说明</a> ·
     <a href="docs/介绍.md">使用指南</a>
   </p>
 
   <p>
     <a href="https://github.com/vista-zhangg/codex-desktop-pet/actions/workflows/ci.yml"><img src="https://github.com/vista-zhangg/codex-desktop-pet/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/platform-Windows%20x64-0078D4?logo=windows" alt="Windows x64 only">
-    <img src="https://img.shields.io/badge/version-1.9.1-F6A04A" alt="Version 1.9.1">
+    <img src="https://img.shields.io/badge/version-1.9.2-F6A04A" alt="Version 1.9.2">
     <a href="LICENSE"><img src="https://img.shields.io/badge/code%20license-MIT-2EA44F" alt="MIT License"></a>
   </p>
 </div>
@@ -52,13 +52,15 @@ AgentPaw · AI 桌伴让你在桌面上查看 Codex 的任务进度、5h / 7d �
 
 ## 真实状态示例
 
-内置 **打工猫、奶茶鼠与小蜜蜂蜜蜜**，也支持自己的原创 IP。奶茶鼠创作者为 **阿翅 Achi**，官方账号为「奶茶鼠的想法（BOBARAT）」，见[奶茶鼠署名](assets/characters/milktea-mouse/CREDITS.md)。小蜜蜂蜜蜜创作者为 **花栗鼠发发（曾用名：花栗鼠 Toby）**，见[蜜蜜署名与出处](assets/characters/mimi-bee/CREDITS.md)。
+内置 **打工猫、奶茶鼠、小蜜蜂蜜蜜与线条小狗**，也支持自己的原创 IP。奶茶鼠创作者为 **阿翅 Achi**，官方账号为「奶茶鼠的想法（BOBARAT）」，见[奶茶鼠署名](assets/characters/milktea-mouse/CREDITS.md)。小蜜蜂蜜蜜创作者为 **花栗鼠发发（曾用名：花栗鼠 Toby）**，见[蜜蜜署名与出处](assets/characters/mimi-bee/CREDITS.md)。
 
-1.9.1 为奶茶鼠新增 69 张动图，现有 **84 张内置 GIF**，覆盖 16 个状态，并补齐睡觉、犯困和哈欠动作。每个状态仍可独立新增、替换或恢复默认。
+奶茶鼠现有 **83 张内置 GIF**，覆盖 16 个状态，包含睡觉、犯困和哈欠动作。每个状态仍可独立新增、替换或恢复默认。
 
-| 打工猫 · 工作中 | 奶茶鼠 · 工作中 | 小蜜蜂蜜蜜 · 打招呼 |
-| --- | --- | --- |
-| ![打工猫桌宠](assets/cat/cat-working.gif) | ![奶茶鼠 GIF 桌宠工作状态](assets/characters/milktea-mouse/13.gif) | ![小蜜蜂蜜蜜 GIF 桌宠](assets/characters/mimi-bee/01.gif) |
+线条小狗从微信第 1～4 弹中筛选了 **58 张动图**。原创工作室为 **Moonlab Studio（moonlab_studio）**，官方账号为「线条小狗Maltese」，见[作者与素材说明](assets/characters/line-dog/CREDITS.md)。
+
+| 打工猫 · 工作中 | 奶茶鼠 · 工作中 | 小蜜蜂蜜蜜 · 打招呼 | 线条小狗 · 工作中 |
+| --- | --- | --- | --- |
+| ![打工猫桌宠](assets/cat/cat-working.gif) | ![奶茶鼠 GIF 桌宠工作状态](assets/characters/milktea-mouse/13.gif) | ![小蜜蜂蜜蜜 GIF 桌宠](assets/characters/mimi-bee/01.gif) | ![线条小狗 GIF 桌宠](assets/characters/line-dog/set2-18.gif) |
 
 <table>
   <tr>
@@ -75,13 +77,13 @@ AgentPaw · AI 桌伴让你在桌面上查看 Codex 的任务进度、5h / 7d �
   </tr>
 </table>
 
-> 第三方角色素材不包含在代码的 MIT License 中。来源与权属分别见[猫角色素材署名](assets/cat/CREDITS.md)、[奶茶鼠素材说明](assets/characters/milktea-mouse/CREDITS.md)和[小蜜蜂蜜蜜素材说明](assets/characters/mimi-bee/CREDITS.md)。品牌图标独立于角色素材。
+> 第三方角色素材不包含在代码的 MIT License 中。来源与权属分别见[猫角色素材署名](assets/cat/CREDITS.md)、[奶茶鼠素材说明](assets/characters/milktea-mouse/CREDITS.md)、[小蜜蜂蜜蜜素材说明](assets/characters/mimi-bee/CREDITS.md)和[线条小狗素材说明](assets/characters/line-dog/CREDITS.md)。品牌图标独立于角色素材。
 
 ## 自定义状态表情
 
 在任务栏托盘打开“设置”→“角色与表情”，先选角色，再选择工作、反馈或闲时状态。可直接创建新角色或[导入角色包](docs/character-packs.md)。选择状态后可以：
 
-前三张卡片是内置角色，第四张 **“＋ 自定义角色”** 用来创建自己的伙伴：输入名称，选择待命 GIF，再逐个补充动作。已创建的个人角色排列在后面。
+内置角色卡片排列在前，随后是 **“＋ 自定义角色”** 用来创建自己的伙伴：输入名称，选择待命 GIF，再逐个补充动作。已创建的个人角色排列在后面。
 
 - “新增”保留当前表情，把新 GIF 加入随机轮换；
 - 在播放列表中选中任意默认或自定义 GIF 后，可单独替换或移出；内置文件不会删除，自定义原始文件也不受影响；

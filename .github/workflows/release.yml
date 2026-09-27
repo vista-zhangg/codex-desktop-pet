@@ -44,7 +44,12 @@ jobs:
           if ($beeCredits -notmatch '花栗鼠发发' -or $beeCredits -notmatch 'xinminweekly.com.cn') {
             throw 'Mimi Bee attribution is missing or incomplete'
           }
-          if (@(git ls-files "assets/characters/mimi-bee/*.gif").Count -ne 16) { throw 'Expected all 16 Mimi Bee GIF assets' }
+          if (@(git ls-files "assets/characters/mimi-bee/*.gif").Count -ne 58) { throw 'Expected all 58 selected Mimi Bee GIF assets' }
+          $dogCredits = Get-Content assets/characters/line-dog/CREDITS.md -Raw
+          if ($dogCredits -notmatch 'Moonlab Studio' -or $dogCredits -notmatch 'linktr.ee/moonlab_studio') {
+            throw 'Line Dog attribution is missing or incomplete'
+          }
+          if (@(git ls-files "assets/characters/line-dog/*.gif").Count -ne 58) { throw 'Expected all 58 selected Line Dog GIF assets' }
       - run: npm run package:win
       - name: List Windows packages
         shell: pwsh

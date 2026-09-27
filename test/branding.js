@@ -63,10 +63,13 @@ assert(readme.includes('assets/cat/CREDITS.md') && readmeEn.includes('assets/cat
   'README links must preserve original attribution in dedicated asset credits');
 assert(readme.includes('assets/characters/milktea-mouse/CREDITS.md') && readmeEn.includes('assets/characters/milktea-mouse/CREDITS.md'));
 assert(read('assets/characters/milktea-mouse/CREDITS.md').includes('阿翅 Achi'));
-assert.equal(fs.readdirSync(path.join(root, 'assets/characters/milktea-mouse')).filter((name) => name.endsWith('.gif')).length, 84);
+assert.equal(fs.readdirSync(path.join(root, 'assets/characters/milktea-mouse')).filter((name) => name.endsWith('.gif')).length, 83);
 assert(readme.includes('assets/characters/mimi-bee/CREDITS.md') && readmeEn.includes('assets/characters/mimi-bee/CREDITS.md'));
 assert(read('assets/characters/mimi-bee/CREDITS.md').includes('花栗鼠发发'));
-assert.equal(fs.readdirSync(path.join(root, 'assets/characters/mimi-bee')).filter((name) => name.endsWith('.gif')).length, 16);
+assert.equal(fs.readdirSync(path.join(root, 'assets/characters/mimi-bee')).filter((name) => name.endsWith('.gif')).length, 58);
+assert(readme.includes('assets/characters/line-dog/CREDITS.md') && readmeEn.includes('assets/characters/line-dog/CREDITS.md'));
+assert(read('assets/characters/line-dog/CREDITS.md').includes('Moonlab Studio'));
+assert.equal(fs.readdirSync(path.join(root, 'assets/characters/line-dog')).filter((name) => name.endsWith('.gif')).length, 58);
 assert.equal(pkg.build.nsis.guid, '8737e7ad-d3e9-5b66-8bd0-f2a73c6219ec', 'rebranding preserves the installer upgrade identity');
 for (const file of ['CONTRIBUTING.md', 'SECURITY.md', 'docs/PRIVACY.md']) {
   assert(fs.existsSync(path.join(root, file)), `${file} must exist`);

@@ -106,12 +106,12 @@ async function main() {
     assert.equal(normalizedMilk.slots.thinking.active[0].url, '../assets/characters/milktea-mouse/plus7-04.gif', 'thinking uses the focused pose');
     assert(normalizedMilk.slots.thinking.active[0].name.includes('认真'));
     const milkFiles = new Set(Object.values(normalizedMilk.slots).flatMap(slot => slot.active.map(asset => asset.url)));
-    assert.equal(milkFiles.size, 84, 'all existing and selected milk mouse GIFs remain usable after normalization');
+    assert.equal(milkFiles.size, 83, 'all existing and selected milk mouse GIFs remain usable after normalization');
     assert.deepEqual(normalizedMilk.slots['ambient-sleep'].active.map(asset => asset.url.split('/').pop()),
       ['plus3-16.gif', 'plus4-11.gif', 'plus5-11.gif'], 'rest uses sleeping, dozing and yawning animations');
     assert.equal(builtin.character.canDelete, false);
     assert.equal(builtin.character.removeBackground, false);
-    assert.equal(builtin.characters.filter((c) => c.builtin).length, 3);
+    assert.equal(builtin.characters.filter((c) => c.builtin).length, 4);
     assert.throws(() => manager.removeCharacter('milktea-mouse'));
     for (const slot of Registry.SLOT_IDS) for (const asset of builtin.slots[slot].active) {
       assert(asset.url.startsWith('../assets/characters/milktea-mouse/'));
@@ -137,7 +137,13 @@ async function main() {
       assert(fs.existsSync(path.resolve(__dirname, '../renderer', asset.url)));
       beeFiles.add(asset.url);
     }
-    assert.equal(beeFiles.size, 16, 'all 16 original animations are assigned');
+    assert.equal(beeFiles.size, 58, 'original and selected yellow Mimi animations survive normalization');
+    assert(bee.slots.working.active[0].url.endsWith('/set2-09.gif'), 'working uses the computer animation');
+    assert(bee.slots.thinking.active[0].name.includes('思考'));
+    assert(bee.slots['ambient-sleep'].active.some(asset => asset.url.endsWith('/set2-16.gif')));
+    for (const excluded of ['set4-07', 'set4-12', 'set4-13', 'set5-14', 'set6-03', 'set6-05']) {
+      assert(!fs.existsSync(path.join(__dirname, '../assets/characters/mimi-bee', excluded + '.gif')), 'other characters are not bundled');
+    }
     const beeDefault = bee.slots.working.active[0];
     await manager.importGif(input, 'working', 'replace-one', { assetId: beeDefault.id, removeBackground: false });
     const beeEdit = manager.catalog().slots.working.active[0];
@@ -147,6 +153,30 @@ async function main() {
     assert.equal(manager.catalog().slots.working.active[0].id, beeEdit.id);
     assert.equal(manager.resetSlot('working').catalog.slots.working.active[0].id, beeDefault.id);
     assert.equal(new PetCharacterStore({ rootDir, normalizer }).activeId(), 'mimi-bee');
+    manager.select('line-dog');
+    const dog = Registry.normalizeCatalog(manager.catalog());
+    assert.equal(dog.character.name, '线条小狗');
+    assert.equal(dog.character.canDelete, false);
+    assert.equal(dog.character.removeBackground, false);
+    assert(dog.character.credit.includes('Moonlab Studio'));
+    assert.throws(() => manager.removeCharacter('line-dog'));
+    const dogFiles = new Set();
+    for (const slot of Registry.SLOT_IDS) for (const asset of dog.slots[slot].active) {
+      assert(asset.url.startsWith('../assets/characters/line-dog/'), slot + ' stays in the dog character');
+      assert(fs.existsSync(path.resolve(__dirname, '../renderer', asset.url)));
+      dogFiles.add(asset.url);
+    }
+    assert.equal(dogFiles.size, 58);
+    assert(dog.slots.working.active[0].url.endsWith('/set2-18.gif'));
+    const dogDefault = dog.slots.working.active[0];
+    await manager.importGif(input, 'working', 'replace-one', { assetId: dogDefault.id, removeBackground: false });
+    const dogEdit = manager.catalog().slots.working.active[0];
+    manager.select('mimi-bee');
+    assert.equal(manager.catalog().slots.working.active[0].id, beeDefault.id, 'new role edits leave existing roles intact');
+    manager.select('line-dog');
+    assert.equal(manager.catalog().slots.working.active[0].id, dogEdit.id);
+    assert.equal(manager.resetSlot('working').catalog.slots.working.active[0].id, dogDefault.id);
+    assert.equal(new PetCharacterStore({ rootDir, normalizer }).activeId(), 'line-dog');
     console.log('Character isolation, migration, pack validation, renderer fallback and editing checks passed');
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }
 }

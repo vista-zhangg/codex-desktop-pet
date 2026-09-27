@@ -128,7 +128,8 @@ app.whenReady().then(async()=>{
         return { index: cards.indexOf(add), images: add.querySelectorAll('img').length,
           focused: document.activeElement.id, active: assetCatalog.character.id };
       })()`);
-      assert.equal(addCard.index, 3, 'fourth card is the custom character entry');
+      assert.equal(addCard.index, Object.keys(require('../shared/pet-assets').BUILTIN_CHARACTERS).length,
+        'custom character entry follows all built-in roles');
       assert.equal(addCard.images, 0, 'custom entry never reuses a character thumbnail');
       assert.equal(addCard.focused, 'character-name', 'entry focuses the creation form');
       assert.equal(addCard.active, mouseId, 'opening the creation form keeps the current pet');
