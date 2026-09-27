@@ -653,7 +653,7 @@ function fitPopup(el) {
       el.style.maxHeight = 'none';
       const contentH = el.scrollHeight;
       el.style.maxHeight = prev;
-      const viewportH = el === askEl ? Math.min(contentH, ASK_VIEWPORT_MAX_H) : contentH;
+      const viewportH = el === askEl || el === actionPop ? Math.min(contentH, ASK_VIEWPORT_MAX_H) : contentH;
       const winH = Math.max(340, POPUP_BOTTOM + viewportH + 24);
       setRequestedPetSize(popupW, winH, { popup: true, popupHeight: viewportH });
     };
@@ -761,6 +761,7 @@ function refreshAsk(stats) {
     ? stats.actions
     : (stats.sessions || []).filter((x) => (x.state === 'waiting' || x.state === 'needsinput') && x.choice);
   const items = actionSource
+    .filter((x) => !x.notificationsMuted)
     .map((x) => x.choice)
     .filter(Boolean)
     .filter((c) => (c.options && c.options.length) || c.allowInput);
@@ -1075,6 +1076,7 @@ function hideAsk() {
 let curSessions = [];
 let curActions = [];
 let actionPopOpen = false;
+let actionCards = new Map();
 
 // 当前需要你处理的事项：有 choice、还没答过的 waiting/needsinput 会话
 function actionableItems() {
@@ -1091,29 +1093,40 @@ function updateNotepad(s) {
   curSessions = s.sessions || [];
   curActions = Array.isArray(s.actions) ? s.actions : [];
   const acts = actionableItems();
-  if (!acts.length) {
+  const pendingCount = Math.max(acts.length, (s.waitingCount || 0) + (s.needsinputCount || 0));
+  const unread = (s.recent || []).filter(row => !row.read).length;
+  notepad.classList.toggle('urgent', pendingCount > 0);
+  if (!pendingCount && !unread) {
     notepad.classList.add('hidden');
-    if (actionPopOpen) closeActionPop();
-    return;
+  } else {
+    notepad.classList.remove('hidden');
+    npBadge.textContent = pendingCount || unread;
+    npBadge.classList.toggle('urgent', pendingCount > 0);
   }
-  notepad.classList.remove('hidden');
-  npBadge.textContent = acts.length;
-  npBadge.classList.add('urgent');
-  // 弹层开着、且用户没在弹层里打字 → 同步刷新内容
-  if (actionPopOpen && !actionPop.contains(document.activeElement)) { renderActionPop(); fitPopup(actionPop); }
+  if (actionPopOpen) { renderActionPop(); fitPopup(actionPop); }
 }
 
 function renderActionPop() {
   const acts = actionableItems();
-  // 需要你处理
-  if (acts.length) {
-    acActSec.classList.remove('hidden');
-    acActs.innerHTML = '';
-    acts.forEach((c) => acActs.appendChild(buildActCard(c)));
-  } else {
-    acActSec.classList.add('hidden');
-    acActs.innerHTML = '';
+  acActSec.classList.toggle('hidden', !acts.length);
+  // Reconcile by request, preserving focused buttons while unrelated tasks
+  // change. Resolved requests still disappear immediately.
+  const next = new Map();
+  acts.forEach((choice) => {
+    const key = choiceKey(choice);
+    const signature = JSON.stringify(choice);
+    const previous = actionCards.get(key);
+    const card = previous?.signature === signature ? previous.card : buildActCard(choice);
+    next.set(key, { signature, card });
+  });
+  for (const [key, previous] of actionCards) {
+    if (next.get(key)?.card !== previous.card) previous.card.remove();
   }
+  [...next.values()].forEach(({ card }, index) => {
+    if (acActs.children[index] !== card) acActs.insertBefore(card, acActs.children[index] || null);
+  });
+  actionCards = next;
+  if (window.AgentPawTaskCenter) window.AgentPawTaskCenter.render(lastStats);
 }
 
 // 一张「需要你处理」卡片：问题 + 选项按钮(可点即答) + 自定义输入
@@ -1187,6 +1200,9 @@ function maybeCloseEmptyPop() {
 }
 
 function openActionPop() {
+  clearTimeout(bubbleTimer);
+  bubbleTimer = null;
+  bubble.classList.add('hidden');
   if (window.AgentPawCompanion) window.AgentPawCompanion.hide();
   if (askActive) hideAsk(); // 别和选项面板抢窗口
   if (peekOpen) closePeek();
@@ -1194,11 +1210,13 @@ function openActionPop() {
   renderActionPop();
   actionPop.classList.remove('hidden');
   actionPopOpen = true;
+  if (window.AgentPawTaskCenter) window.AgentPawTaskCenter.opened();
   fitPopup(actionPop);
 }
 function closeActionPop() {
   actionPop.classList.add('hidden');
   actionPopOpen = false;
+  if (window.AgentPawTaskCenter) window.AgentPawTaskCenter.closed();
   window.pet.blurPet();
   resetPetSize();
 }
@@ -1284,15 +1302,20 @@ function peekSessionTime(s) {
 }
 
 function peekSessions(stats) {
-  const visible = (stats.sessions || []).filter((s) => s && !s.headless && s.state !== 'sleeping');
+  const visible = (stats.sessions || []).filter((s) => s && !s.headless && (s.pinned || s.state !== 'sleeping'));
   const active = visible.filter((s) => PEEK_BUSY_STATES.has(s.state));
-  const list = active.length
-    ? active
+  const pinned = visible.filter((s) => s.pinned);
+  const list = active.length || pinned.length
+    ? [...new Set([...active, ...pinned])]
     : visible
       .filter((s) => s.badge === 'done' || s.badge === 'interrupted')
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
       .slice(0, 1);
   return list.slice().sort((a, b) => {
+    const urgent = s => ['waiting', 'needsinput', 'error'].includes(s.state);
+    if (urgent(a) !== urgent(b)) return urgent(a) ? -1 : 1;
+    if (PEEK_BUSY_STATES.has(a.state) !== PEEK_BUSY_STATES.has(b.state)) return PEEK_BUSY_STATES.has(a.state) ? -1 : 1;
+    if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
     const pa = SESS_SORT[a.state] != null ? SESS_SORT[a.state] : 4;
     const pb = SESS_SORT[b.state] != null ? SESS_SORT[b.state] : 4;
     return pa !== pb ? pa - pb : (a.idleMs || 0) - (b.idleMs || 0);
@@ -1315,17 +1338,17 @@ function makePeekRow(s) {
   main.className = 'peek-row-main';
   const project = document.createElement('span');
   project.className = 'peek-row-project';
-  project.textContent = `${peekAgentLabel(s.agent)} · ${s.project || t('peek.unknownProject')}`;
+  project.textContent = `${s.pinned ? '★ ' : ''}${peekAgentLabel(s.agent)} · ${s.alias || s.project || t('peek.unknownProject')}`;
   project.title = project.textContent;
   const detail = document.createElement('span');
   detail.className = 'peek-row-detail';
-  detail.textContent = peekSessionDetail(s);
+  detail.textContent = s.archived ? '已结束 · 仍在关注' : peekSessionDetail(s);
   main.appendChild(project);
   main.appendChild(detail);
 
   const time = document.createElement('span');
   time.className = 'peek-row-time';
-  time.textContent = peekSessionTime(s);
+  time.textContent = s.archived ? '' : peekSessionTime(s);
 
   row.appendChild(dot);
   row.appendChild(main);
@@ -1367,7 +1390,7 @@ function renderPeek(stats) {
   else if (primary && PEEK_BUSY_STATES.has(primary.state)) {
     peekSubtitle.textContent = t('peek.sessionSub', {
       agent: peekAgentLabel(primary.agent),
-      project: primary.project || t('peek.unknownProject'),
+      project: primary.alias || primary.project || t('peek.unknownProject'),
     });
   } else {
     peekSubtitle.textContent = restingState === 'sleeping' ? t('peek.sleepingSub') : t('peek.idleSub');
@@ -1621,7 +1644,7 @@ function clearTransient() {
   clearTimeout(transientTimer);
 }
 
-// 大任务完成的彩带
+// 用户主动互动时的彩带，不用于自动任务提醒。
 function confetti() {
   const el = curSkinEl();
   const sr = stage.getBoundingClientRect();
@@ -1692,7 +1715,7 @@ function showBubble(text, holdMs = 3200, force = false) {
     if (!force) return;
     window.AgentPawCompanion.hide();
   }
-  if (!force && (radialOpen || askActive || peekOpen || quotaPopoverOpen)) return; // 弹层开着时不用普通气泡盖住它
+  if (!force && (radialOpen || askActive || actionPopOpen || peekOpen || quotaPopoverOpen)) return; // 弹层开着时不用普通气泡盖住它
   // emoji → 内联 SVG（AgentPawIcons 在 emoji 字符与 SVG 之间做安全替换；不可识别字符原样保留）
   if (window.AgentPawIcons && window.AgentPawIcons.hasMappedEmoji(text)) {
     window.AgentPawIcons.setTextWithIcons(bubbleText, text);
@@ -1812,25 +1835,25 @@ window.pet.onEvent((ev) => {
         setState('working');
         playAction(ev.tool, ev.icon);
       }
-      showBubble(`${ev.icon || '🔧'} ${ev.detail}`);
+      if (!ev.silent) showBubble(`${ev.icon || '🔧'} ${ev.detail}`);
       break;
     }
     case 'say':
       if (ev.text && ev.text.length > 2 && state !== 'waiting') {
         const dur = Math.min(6000, Math.max(2200, ev.text.length * 80));
-        // Stop 会同批派生 turn-done(happy) + say(talking)：让庆祝先演完，
-        // talking 排在 happy 结束后接棒，气泡文本立刻显示不用等。
+        // Preserve an in-progress completion animation before the speech pose.
+        // Notification policy can retain the pose without a second bubble.
         if (transientState === 'happy' && perfNow() < transientUntil) {
-          showBubble(`💬 ${ev.text}`, Math.min(4200, dur));
+          if (!ev.silent) showBubble(`💬 ${ev.text}`, Math.min(4200, dur));
           const token = ++sayToken;
           setTimeout(() => {
             if (token === sayToken && state !== 'waiting') transient(ev.emotion || 'talking', dur);
           }, Math.max(0, transientUntil - perfNow()));
         } else if (ev.emotion) {
           // Claude 的话里带情绪（sorry/puzzled/excited）→ 短暂表情替代 talking
-          transient(ev.emotion, 2800, `💬 ${ev.text}`, Math.min(4200, ev.text.length * 80));
+          transient(ev.emotion, 2800, ev.silent ? null : `💬 ${ev.text}`, Math.min(4200, ev.text.length * 80));
         } else {
-          transient('talking', dur, `💬 ${ev.text}`, Math.min(4200, dur));
+          transient('talking', dur, ev.silent ? null : `💬 ${ev.text}`, Math.min(4200, dur));
         }
       }
       break;
@@ -1838,20 +1861,17 @@ window.pet.onEvent((ev) => {
       // 你的输入里带情绪（loved/sad/excited）→ 打工伙伴即时反应；否则像以前一样进 thinking
       if (ev.emotion && state !== 'waiting') {
         const tip = ev.emotion === 'loved' ? t('bub.loved') : ev.emotion === 'sad' ? t('bub.sad') : t('bub.ack');
-        transient(ev.emotion, 2800, tip, 2600);
+        transient(ev.emotion, 2800, ev.silent ? null : tip, 2600);
       } else {
         // 多会话时聚合里 working > thinking，直接 setState 会在下个快照被盖掉
         // （只闪 ~150ms）。用 transient 保证「刚提交任务」的思考表情至少停留一会。
         if (state !== 'waiting') transient('thinking', 3500);
-        showBubble(t('bub.newTask'), 2600);
+        if (!ev.silent) showBubble(t('bub.newTask'), 2600);
       }
       break;
-    case 'turn-done':
-      transient('happy', 1800, t('bub.roundDone'), 3400);
-      break;
-    case 'big-done':
-      transient('happy', 2200, t('bub.bigDone', { ops: ev.ops || '' }), 3800);
-      confetti();
+    case 'completion-summary':
+      if (['waiting', 'needsinput', 'error'].includes(state)) break;
+      transient('happy', 1800, ev.count > 1 ? `${ev.count} 个任务已完成，点击行动中心回看` : `${ev.project || '任务'} · 这一轮已完成`, 3800);
       break;
     case 'error':
       transient('error', 2600, ev.text || t('bub.error'), 3000);
@@ -1875,7 +1895,7 @@ window.pet.onEvent((ev) => {
       }
       break;
     case 'greet':
-      transient('greet', 2000, t('bub.greet', { project: ev.project || '' }), 2600);
+      transient('greet', 2000, ev.silent ? null : t('bub.greet', { project: ev.project || '' }), 2600);
       break;
     case 'longcmd':
       if (state !== 'waiting') showBubble(t('bub.slowCmd'), 3000);
@@ -2699,6 +2719,11 @@ quotaPopover.addEventListener('focusin', keepQuotaPopoverOpen);
 quotaPopover.addEventListener('focusout', scheduleQuotaPopoverClose);
 quotaPopoverClose.addEventListener('click', (e) => { e.stopPropagation(); closeQuotaPopover(); });
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && actionPopOpen) {
+    e.preventDefault();
+    closeActionPop();
+    return;
+  }
   if (e.key === 'Escape' && quotaPopoverOpen) {
     e.preventDefault();
     closeQuotaPopover();

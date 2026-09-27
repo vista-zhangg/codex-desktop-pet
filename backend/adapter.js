@@ -516,9 +516,7 @@ function activityToEvents(act) {
     }
     case 'Stop':
       if (realCompletion) {
-        const ops = countRecentOps(session);
-        if (ops >= 5) out.push({ kind: 'big-done', project, ops, ts: Date.now() });
-        else out.push({ kind: 'turn-done', project, ops, ts: Date.now() });
+        out.push({ kind: 'turn-done', project, ts: Date.now() });
       }
       if (assistantChanged && session.assistantLastOutput) {
         const emo = session.pendingAssistantEmotion || null;
@@ -541,19 +539,12 @@ function activityToEvents(act) {
   }
   // 每个事件都带上来源 agent：单宠模式仍保留来源，供会话行和操作流标识工具
   const agent = agentOf(session);
-  for (const ev of out) ev.agent = agent;
-  return out;
-}
-
-function countRecentOps(session) {
-  const ev = Array.isArray(session.recentEvents) ? session.recentEvents : [];
-  let n = 0;
-  for (let i = ev.length - 1; i >= 0; i--) {
-    const e = ev[i];
-    if (e.event === 'UserPromptSubmit') break;
-    if (e.event === 'PreToolUse' || e.event === 'PostToolUse' || e.event === 'SubagentStart') n++;
+  for (const ev of out) {
+    ev.agent = agent;
+    ev.sessionId = session.id;
+    ev.eventKey = `${session.id}:${event}:${session.updatedAt || ev.ts}`;
   }
-  return n;
+  return out;
 }
 
 module.exports = {

@@ -250,8 +250,9 @@ html, body {
   background: #fff7f2; border: 1.5px solid #d97757; border-radius: 9px;
   box-shadow: 0 4px 12px rgba(120, 60, 35, 0.3);
   transform: rotate(-8deg); transition: transform 0.15s ease;
-  animation: npRaise 2.4s ease-in-out infinite;
 }
+.notepad.urgent { animation: npRaise 2.4s ease-in-out 2; }
+@media (prefers-reduced-motion: reduce) { .notepad.urgent { animation: none; } }
 .notepad:hover { transform: rotate(-8deg) scale(1.12); }
 .notepad.hidden { display: none; }
 .np-icon { font-size: 20px; line-height: 1; }
@@ -816,7 +817,7 @@ html, body {
 .prop.jit.on { animation: propIn 0.3s ease forwards, propJit 0.2s ease-in-out infinite 0.3s; }
 @keyframes propJit { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
 
-/* ---- 大任务完成彩带 ---- */
+/* ---- 主动互动反馈彩带 ---- */
 .confetti {
   position: absolute;
   pointer-events: none;

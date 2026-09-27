@@ -1,0 +1,12 @@
+.workflow-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.workflow-modes button { padding: 15px; text-align: left; border: 1px solid var(--ui-line); background: var(--ui-surface); border-radius: 12px; cursor: pointer; color: var(--ui-text); }
+.workflow-modes button[aria-pressed="true"] { background: var(--ui-blue-soft); border-color: #9dc8f4; }
+.workflow-modes strong { display: block; font-size: 14px; margin-bottom: 5px; }
+.workflow-modes span { display: block; font-size: 12px; color: var(--ui-secondary); line-height: 1.6; }
+#workflow-agents .setting-card, #workflow-projects .setting-card { margin-bottom: 8px; }
+#workflow-projects .setting-title { overflow-wrap: anywhere; }
+.workflow-shortcuts { display: grid; gap: 12px; margin: 14px 0; }
+.workflow-shortcuts label { display: grid; grid-template-columns: minmax(140px,1fr) minmax(180px,1.2fr); align-items: center; gap: 6px 12px; font-size: 13px; color: var(--ui-text); }
+.workflow-shortcuts input { min-width: 0; width: 100%; padding: 9px 10px; border: 1px solid var(--ui-line); border-radius: 8px; background: #fff; color: var(--ui-text); font-size: 13px; }
+.shortcut-error { grid-column: 2; font-size: 12px; color: #bd4942; }
+.shortcut-error:empty { display: none; }

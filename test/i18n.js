@@ -58,7 +58,6 @@ for (const tool of ['Edit', 'Write', 'NotebookEdit', 'Read', 'Bash', 'Grep', 'Gl
   assert('tool.' + tool in i18n.DICT.zh, `missing tool.${tool}`);
 }
 
-assert.strictEqual(i18n.t('bub.bigDone', { ops: 7 }), '🎉 大任务搞定！(7步)');
 assert.strictEqual(i18n.backgroundStatus({ backgroundTasksCount: 2 }), '后台任务 2 项');
 assert.strictEqual(i18n.backgroundStatus({ sessionCronsCount: 1 }), '定时等待 1 项');
 assert.strictEqual(i18n.backgroundStatus({ backgroundTasksCount: 2, sessionCronsCount: 1 }), '后台 2 项 · 定时 1 项');

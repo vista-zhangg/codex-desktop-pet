@@ -239,7 +239,7 @@ function createCore(options = {}) {
       } else {
         // Store idle (NOT a lingering "attention") so the session settles and the
         // badge derives to "done" via requiresCompletionAck. The celebration is
-        // event-driven (turn-done/big-done) off realCompletion, not the state.
+        // event-driven (turn-done) off realCompletion, not the state.
         resolvedState = 'idle';
         realCompletion = true;
         s.requiresCompletionAck = true;

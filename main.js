@@ -11,7 +11,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { fileURLToPath, pathToFileURL } = require('url');
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, dialog, shell, protocol, net, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, dialog, shell, protocol, net, powerMonitor, globalShortcut } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const BRAND = require('./shared/brand');
 const { IPC } = require('./shared/ipc-channels');
@@ -64,6 +64,10 @@ const privacy = require('./backend/privacy');
 const { createRestReminderController } = require('./backend/rest-reminders');
 const { createPetVisibilityController } = require('./backend/pet-visibility');
 const { createDesktopPresenceMonitor } = require('./backend/desktop-presence');
+const workflowPreferences = require('./shared/workflow-preferences');
+const { createTaskCenter, projectKey } = require('./backend/task-center');
+const { createTaskNotifications } = require('./backend/task-notifications');
+const { createWorkflowShortcuts, nextAttention } = require('./backend/workflow-shortcuts');
 
 const t = i18n.t;
 const petAssetStore = new PetCharacterStore();
@@ -141,6 +145,10 @@ const primaryPetState = () => (petWin && !petWin.isDestroyed() ? petState.get(pe
 let lastStats = null;   // 全量快照（面板与桌宠共用）
 let statsTimer = null;
 let emitDebounce = null;
+let taskCenter = null;
+let taskNotifications = null;
+let workflowShortcuts = null;
+let lastAttentionSessionId = '';
 const recentOps = []; // ring for the panel "操作流"; newest first, capped
 const pendingQuotaAlerts = new Map();
 let quotaAlertTimer = null;
@@ -372,6 +380,16 @@ function openSettings() {
   applyWindowBranding(win);
   hardenWindow(win, path.join(__dirname, 'renderer', 'settings.html'));
   settingsWin = win;
+  // Release bindings while editing settings so recording an existing shortcut
+  // reaches the input instead of switching windows or hiding the pet.
+  win.on('focus', () => { if (workflowShortcuts) workflowShortcuts.setSuspended(true); });
+  const resumeShortcuts = () => {
+    if (workflowShortcuts && !companionQuitting) {
+      workflowShortcuts.setSuspended(false);
+      sendWin(settingsWin, IPC.WORKFLOW_PREFERENCES, workflowSettings());
+    }
+  };
+  win.on('blur', resumeShortcuts);
   win.loadFile(path.join(__dirname, 'renderer', 'settings.html'));
   win.webContents.on('did-finish-load', () => {
     setTimeout(() => {
@@ -380,7 +398,7 @@ function openSettings() {
       } catch {}
     }, 80);
   });
-  win.on('closed', () => { if (settingsWin === win) settingsWin = null; });
+  win.on('closed', () => { if (settingsWin === win) settingsWin = null; resumeShortcuts(); });
 }
 
 function closeSettings() {
@@ -655,6 +673,7 @@ function publishUpdateState(state) {
 
 function publishPrivacyState(enabled = config.get().privacyMode === true) {
   const state = { enabled: enabled === true };
+  sendWin(settingsWin, IPC.WORKFLOW_PREFERENCES, workflowSettings());
   sendWin(settingsWin, IPC.PRIVACY_STATE, state);
   return state;
 }
@@ -866,6 +885,7 @@ function buildStats(agent = 'all', snapshot = null, cachedMeter = null) {
     usageProvider: 'all',
   });
   stats.chipDisplay = getChipDisplay();
+  for (const row of stats.sessions) row.projectKey = projectKey(core.getSession(row.sessionId) || { id: row.sessionId });
   stats.usageWarnings = traeUsage && traeUsage.diagnostics
     && traeUsage.diagnostics.unavailable === 'compressed_logs'
     ? ['TRAE Solo 用量暂不可获取；统计仅包含已采集的数据，缺失用量不代表零消耗。'] : [];
@@ -887,7 +907,8 @@ function buildStats(agent = 'all', snapshot = null, cachedMeter = null) {
       quotaHistory: codexMetering ? codexMetering.getQuotaHistory() : [],
     }, codexQuotaState),
   };
-  return privacy.protectStats(stats, config.get().privacyMode === true);
+  const decorated = taskCenter ? taskCenter.sync(stats, config.get().notifications) : stats;
+  return privacy.protectStats(decorated, config.get().privacyMode === true);
 }
 
 
@@ -906,6 +927,7 @@ function emitStats() {
   // 一次性获取 metering 数据，避免多次调用 getStats()
   const cachedMeter = meterStats();
   lastStats = buildStats('all', snapshot, cachedMeter);
+  if (taskNotifications) taskNotifications.reconcile(lastStats.sessions);
   for (const st of petStates()) sendWin(st.win, IPC.PET_STATS, lastStats);
   sendPanel(IPC.PANEL_STATS, lastStats);
 }
@@ -915,11 +937,124 @@ function scheduleEmit() {
   emitDebounce = setTimeout(() => { emitDebounce = null; emitStats(); }, 150);
 }
 
+function routeTaskEvent(event) {
+  const session = core && core.getSession(event.sessionId);
+  taskNotifications.push({ ...event, projectKey: projectKey(session || { id: event.sessionId }) });
+}
+
+function workflowSettings() {
+  const value = config.get();
+  return { notifications: { ...value.notifications, mutedProjects: value.notifications.mutedProjects.map(row => ({
+    ...row, label: value.privacyMode ? t('privacy.project') : row.label,
+  })) }, shortcuts: value.shortcuts, shortcutErrors: workflowShortcuts ? workflowShortcuts.errors() : {}, privacyMode: value.privacyMode };
+}
+
+function publishWorkflowSettings() {
+  sendWin(settingsWin, IPC.WORKFLOW_PREFERENCES, workflowSettings());
+  emitStats();
+}
+
+function showWorkflowSurface(surface) {
+  showPet();
+  sendPet(IPC.WORKFLOW_COMMAND, surface);
+}
+
+function startWorkflowShortcuts() {
+  let navigating = false;
+  workflowShortcuts = createWorkflowShortcuts(globalShortcut, {
+    peek: () => showWorkflowSurface('peek'),
+    next: async () => {
+      if (navigating) return;
+      const item = nextAttention((lastStats || {}).sessions, lastAttentionSessionId);
+      if (!item) { showWorkflowSurface('actions'); return; }
+      navigating = true;
+      try {
+        lastAttentionSessionId = item.sessionId;
+        const ok = await focusSession(core.getSession(item.sessionId), { openExternal: url => shell.openExternal(url) });
+        if (!ok) showWorkflowSurface('actions');
+      } finally { navigating = false; }
+    },
+    toggle: () => {
+      const win = firstAlivePetWin();
+      if (win && win.isVisible()) { petVisibility.hide(); applyPetVisibility(); refreshTrayMenu(); }
+      else showPet();
+    },
+  });
+  workflowShortcuts.configure(config.get().shortcuts, false);
+  if (settingsWin && settingsWin.isFocused()) workflowShortcuts.setSuspended(true);
+}
+
+function registerWorkflowIpc() {
+  const fromSettings = e => !!(settingsWin && !settingsWin.isDestroyed() && e.sender === settingsWin.webContents);
+  const fromPet = e => !!stateOfSender(e.sender);
+  ipcMain.handle(IPC.GET_WORKFLOW_PREFERENCES, e => fromSettings(e) ? workflowSettings() : null);
+  ipcMain.handle(IPC.SET_WORKFLOW_PREFERENCES, (e, value) => {
+    if (!fromSettings(e) || !value || typeof value !== 'object') return { ok: false };
+    if (value.shortcuts) {
+      const result = workflowShortcuts.configure(value.shortcuts);
+      if (!result.ok) return result;
+    }
+    const previous = config.get().notifications;
+    const notifications = workflowPreferences.notifications({ ...previous, ...value.notifications,
+      // Labels originate in observed sessions, including while privacy mode is on.
+      mutedProjects: value.unmuteProject ? previous.mutedProjects.filter(row => row.key !== value.unmuteProject) : previous.mutedProjects,
+    });
+    config.save({ notifications, ...(value.shortcuts ? { shortcuts: workflowPreferences.shortcuts(value.shortcuts) } : {}) });
+    publishWorkflowSettings();
+    return { ok: true, ...workflowSettings() };
+  });
+  ipcMain.handle(IPC.UPDATE_SESSION_PREFERENCES, (e, id, value) => {
+    if (!fromPet(e) || !taskCenter || !value || typeof value !== 'object') return { ok: false };
+    const source = taskCenter.lookup(id);
+    if (source && value.muted === true && config.get().notifications.mutedProjects.length >= 100
+      && !config.get().notifications.mutedProjects.some(row => row.key === source.projectKey)) {
+      return { ok: false, message: '最多静音 100 个项目，请先在设置中移除不再使用的项目' };
+    }
+    const result = taskCenter.update(id, config.get().privacyMode && source ? { ...value, alias: source.alias || '' } : value);
+    if (!result.ok) return result;
+    if (typeof value.muted === 'boolean' && source) {
+      const preferences = config.get().notifications;
+      const mutedProjects = preferences.mutedProjects.filter(row => row.key !== source.projectKey);
+      if (value.muted) mutedProjects.push({ key: source.projectKey, label: source.project });
+      config.save({ notifications: workflowPreferences.notifications({ ...preferences, mutedProjects }) });
+    }
+    publishWorkflowSettings();
+    return { ok: true };
+  });
+  ipcMain.handle(IPC.MARK_RECENT_READ, (e, ids) => {
+    if (!fromPet(e) || !taskCenter) return { ok: false };
+    const ok = taskCenter.markRead(ids);
+    emitStats();
+    return { ok };
+  });
+  ipcMain.handle(IPC.CLEAR_RECENT, e => {
+    if (!fromPet(e) || !taskCenter) return { ok: false };
+    const ok = taskCenter.clear();
+    emitStats();
+    return { ok };
+  });
+  ipcMain.handle(IPC.FOCUS_RECENT, async (e, id) => {
+    if (!fromPet(e) || !taskCenter) return false;
+    const entry = taskCenter.recentEntry(id);
+    if (!entry) return false;
+    const session = core.getSession(entry.sessionId) || (entry.agent === 'codex' ? { id: entry.sessionId, agentId: 'codex' } : null);
+    const ok = await focusSession(session, { openExternal: url => shell.openExternal(url) });
+    if (ok) { taskCenter.markRead([id]); emitStats(); }
+    return ok;
+  });
+}
+
 function bootBackend() {
+  taskCenter = createTaskCenter({ file: require('./backend/paths').statePath('task-center.json') });
+  taskNotifications = createTaskNotifications({
+    getPreferences: () => config.get().notifications,
+    deliver: (ev) => sendPetEvent({ ...ev, project: taskCenter.lookup(ev.sessionId)?.alias || ev.project }),
+    record: (ev) => { const added = taskCenter.record(ev); if (added) scheduleEmit(); return added; },
+  });
   const codexDir = env.value('CODEX_DIR') || undefined;
   core = createCore({
     onActivity: (act) => {
-      for (const ev of adapter.activityToEvents(act)) { recordOp(ev); sendPetEvent(ev); }
+      for (const ev of adapter.activityToEvents(act)) { recordOp(ev); routeTaskEvent(ev); }
     },
 
     onDirty: scheduleEmit,
@@ -1101,7 +1236,7 @@ function bootBackend() {
       }
       // Respect manual hiding, fullscreen and quiet time. The request remains
       // available in the owning Agent and is reconciled when the companion returns.
-      sendPetEvent({ kind, project: choice.project, reason, sessionId: entry.sessionId, choice, agent: 'claude', ts: Date.now() });
+      routeTaskEvent({ kind, project: choice.project, reason, sessionId: entry.sessionId, choice, agent: 'claude', ts: Date.now() });
       scheduleEmit();
     },
     onChange: scheduleEmit,
@@ -1399,7 +1534,8 @@ function registerIpc() {
     return permissions.decide(permId, behavior) === true;
   });
   ipcMain.handle(IPC.FOCUS_SESSION, (_e, sessionId) => {
-    return focusSession(core.getSession(sessionId), {
+    const stored = taskCenter && taskCenter.lookup(sessionId);
+    return focusSession(core.getSession(sessionId) || (stored && stored.agent === 'codex' ? { id: sessionId, agentId: 'codex' } : null), {
       openExternal: (url) => shell.openExternal(url),
     });
   });
@@ -1665,9 +1801,11 @@ if (!gotTheLock) {
     config.save({});
     registerPetAssetProtocol();
     registerIpc();
+    registerWorkflowIpc();
     startCompanionServices();
     bootBackend();
     createPetWindows();
+    startWorkflowShortcuts();
     try { buildTray(); } catch {}
     initUpdateService();
   });
@@ -1677,6 +1815,8 @@ app.on('window-all-closed', () => { /* tray app: stay alive */ });
 
 app.on('before-quit', () => {
   companionQuitting = true;
+  if (workflowShortcuts) workflowShortcuts.dispose();
+  if (taskNotifications) taskNotifications.dispose();
   try { if (companionTimer) clearInterval(companionTimer); } catch {}
   try { if (petPointerTimer) clearInterval(petPointerTimer); } catch {}
   try { if (desktopPresence) desktopPresence.stop(); } catch {}

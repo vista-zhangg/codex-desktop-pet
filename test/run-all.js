@@ -55,6 +55,8 @@ const TESTS = Object.freeze([
   'branding.js',
   'opencode-plugin.js',
   'notify-policy.js',
+  'task-workflow.js',
+  'workflow-main.js',
 ]);
 
 function runAll() {

@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="ui.css" />
     <link rel="stylesheet" href="settings.css" />
+    <link rel="stylesheet" href="workflow-settings.css" />
     <link rel="stylesheet" href="capsule.css" />
     <title>AgentPaw · AI 桌伴 · 设置</title>
   </head>
@@ -25,6 +26,7 @@
 <nav class="settings-tabs" role="tablist" aria-orientation="vertical" aria-label="设置分类">
         <div class="nav-caption">偏好设置</div>
         <button id="tab-general" class="settings-tab active" type="button" role="tab" data-tab="general" aria-controls="panel-general" aria-selected="true" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 9h8M8 15h8M10 7v4M14 13v4"/></svg><span>通用</span></button>
+        <button id="tab-workflow" class="settings-tab" type="button" role="tab" data-tab="workflow" aria-controls="panel-workflow" aria-selected="false" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span>任务提醒</span></button>
         <button id="tab-companion" class="settings-tab" type="button" role="tab" data-tab="companion" aria-controls="panel-companion" aria-selected="false" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-8-5-8-11a4 4 0 0 1 8-1 4 4 0 0 1 8 1c0 6-8 11-8 11Z"/></svg><span>陪伴与休息</span></button>
         <button id="tab-appearance" class="settings-tab" type="button" role="tab" data-tab="appearance" aria-controls="panel-appearance" aria-selected="false" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="7" cy="12" r="1"/><path d="M11 12h6"/></svg><span>桌面胶囊</span></button>
         <button id="tab-integrations" class="settings-tab" type="button" role="tab" data-tab="integrations" aria-controls="panel-integrations" aria-selected="false" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="8" height="8" rx="2"/><path d="M10 3v5M14 3v5M10 16v5M14 16v5M3 10h5M3 14h5M16 10h5M16 14h5"/></svg><span>Agent 接入</span></button>
@@ -83,6 +85,39 @@
             <p class="hint" data-i18n="settings.timeHint">彩蛋持续 10 分钟，仅在AgentPaw · AI 桌伴空闲或休息时播放。</p>
           </div>
         </section></div>
+        <div id="panel-workflow" class="settings-panel" data-panel="workflow" role="tabpanel" aria-labelledby="tab-workflow" tabindex="0" hidden>
+          <div class="page-heading"><h1>需要你时，再提醒。</h1><p>选择提醒强度，用快捷键更快回到任务。</p></div>
+          <section class="settings-section">
+            <div class="section-kicker">提醒强度</div>
+            <div class="workflow-modes" role="group" aria-label="提醒强度">
+              <button id="notify-standard" type="button" aria-pressed="true"><strong>标准</strong><span>需要处理、持续失败与合并完成提醒</span></button>
+              <button id="notify-attention" type="button" aria-pressed="false"><strong>仅需处理</strong><span>只弹出等待授权、等待回复与持续失败</span></button>
+            </div>
+            <p class="hint">工具操作只更新状态；连续完成合并提醒，短暂失败恢复后不再弹出。仅减少弹出提醒，不改变桌伴显隐；最近事件仍会记录。</p>
+            <div id="workflow-status" class="setting-status" role="status" aria-live="polite"></div>
+          </section>
+          <section class="settings-section">
+            <div class="section-kicker">各 Agent 的任务提醒</div>
+            <div id="workflow-agents"></div>
+            <p class="hint">关闭后仍保留状态和待处理数量，可从行动中心处理；不会替你允许或拒绝授权。额度与休息提醒沿用各自设置。</p>
+          </section>
+          <section class="settings-section">
+            <div class="section-kicker">已静音的项目</div>
+            <div id="workflow-projects"></div>
+            <p class="hint">在桌伴 → 行动中心 → 会话 → 编辑中设置项目静音。</p>
+          </section>
+          <section class="settings-section">
+            <div class="section-kicker">全局快捷键</div>
+            <p class="hint">默认停用，无需设置也可使用全部功能。点击输入框，按 Ctrl+Shift 或 Ctrl+Alt 加字母、数字、F1–F12 或空格；Backspace 清除，Esc 取消录入。</p>
+            <p class="hint">全局快捷键在其它软件中也会生效，请选自己不常用的组合。编辑设置期间暂停生效。</p>
+            <div class="workflow-shortcuts">
+              <label>打开工作速览<input id="shortcut-peek" type="text" readonly aria-label="打开工作速览快捷键" placeholder="例如 Ctrl+Shift+Space" /><span id="shortcut-peek-error" class="shortcut-error"></span></label>
+              <label>下一条待处理任务<input id="shortcut-next" type="text" readonly aria-label="下一条待处理任务快捷键" placeholder="例如 Ctrl+Shift+J" /><span id="shortcut-next-error" class="shortcut-error"></span></label>
+              <label>显示／隐藏桌伴<input id="shortcut-toggle" type="text" readonly aria-label="显示或隐藏桌伴快捷键" placeholder="例如 Ctrl+Shift+H" /><span id="shortcut-toggle-error" class="shortcut-error"></span></label>
+            </div>
+            <div class="schedule-actions"><div id="shortcut-status" class="setting-status" role="status" aria-live="polite"></div><div class="action-buttons"><button id="shortcut-disable" type="button" class="subtle-button">全部停用</button><button id="shortcut-save" type="button" class="done-button">保存快捷键</button></div></div>
+          </section>
+        </div>
         <div id="panel-companion" class="settings-panel" data-panel="companion" role="tabpanel" aria-labelledby="tab-companion" tabindex="0" hidden>
           <div class="page-heading"><h1>照顾进度，也照顾你。</h1><p>按你使用电脑的时间提醒，伙伴形象与胶囊模式都适用。</p></div>
           <section class="settings-section">
@@ -248,6 +283,9 @@
     </div>
     <script src="../shared/i18n.js"></script>
     <script src="../shared/pet-assets.js"></script>
+    <script src="../shared/agents.js"></script>
+    <script src="../shared/workflow-preferences.js"></script>
     <script src="settings.js"></script>
+    <script src="workflow-settings.js"></script>
   </body>
 </html>

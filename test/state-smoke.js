@@ -124,8 +124,8 @@ async function main() {
     const w = world();
     const cat = w.elements('cat');
     w.handlers.stats(baseStats({ workingCount: 1 }));
-    w.handlers.event({ kind: 'turn-done', project: 'p' });
-    check('turn-done → happy', () => assert(cat.classList.contains('happy')));
+    w.handlers.event({ kind: 'completion-summary', count: 1, project: 'p' });
+    check('completion-summary → happy', () => assert(cat.classList.contains('happy')));
     w.handlers.event({ kind: 'say', text: '我修好了那个 bug，测试也通过了。', project: 'p' });
     check('同批 say 不秒盖 happy', () => assert(cat.classList.contains('happy')));
     await sleep(2000); // happy 1800ms 结束后 say 接棒
@@ -272,7 +272,7 @@ async function main() {
       () => w.handlers.event({ kind: 'user-turn', project: 'p' }),
       () => w.handlers.stats(baseStats({ jugglingCount: 1 })),
       () => { w.clock.offset += 4000; w.handlers.stats(baseStats({ sweepingCount: 1 })); },
-      () => w.handlers.event({ kind: 'turn-done', project: 'p' }),
+      () => w.handlers.event({ kind: 'completion-summary', count: 1, project: 'p' }),
       () => w.handlers.event({ kind: 'waiting', project: 'p' }),
       () => w.handlers.stats(baseStats({ errorCount: 1 })),
       () => w.handlers.stats(baseStats({ idleMs: null })),
@@ -721,6 +721,47 @@ async function main() {
     check('桌宠重新可见后补显并回执', () => {
       assert(hidden.elements('bubble-text').textContent.includes('10%'));
       assert(hidden.calls.some((call) => call[0] === 'quotaAlertShown'));
+    });
+  }
+
+  console.log('[R17] 通知静音、关注与完成提醒优先级');
+  {
+    const w = world();
+    w.elements('ask').classList.add('hidden');
+    const choice = { kind: 'perm', sessionId: 'muted', project: 'p', permId: 'perm-muted',
+      options: [{ key: 'allow', label: '允许' }, { key: 'deny', label: '拒绝' }] };
+    w.handlers.stats(baseStats({ waitingCount: 1,
+      sessions: [{ sessionId: 'muted', agent: 'claude', project: 'p', state: 'waiting', choice }],
+      actions: [{ actionId: 'perm-muted', sessionId: 'muted', state: 'waiting', notificationsMuted: true, choice }],
+    }));
+    check('静音不自动弹授权，但保留待处理数量', () => {
+      assert(w.elements('ask').classList.contains('hidden'));
+      assert.equal(w.elements('np-badge').textContent, 1);
+    });
+    w.handlers.event({ kind: 'completion-summary', count: 2 });
+    check('其他任务完成不能盖过等待授权', () => assert(w.elements('cat').classList.contains('waiting')));
+    w.elements('notepad').dispatch('click');
+    check('静音权限仍可在行动中心手动处理', () => assert.equal(w.elements('ac-acts').children.length, 1));
+    const permissionCard = w.elements('ac-acts').children[0];
+    w.handlers.stats(baseStats({ waitingCount: 1, actions: [{ actionId: 'perm-muted', choice, notificationsMuted: true }] }));
+    check('快照不重建仍有效的授权按钮', () => assert.strictEqual(w.elements('ac-acts').children[0], permissionCard));
+    w.handlers.event({ kind: 'error', text: 'should not cover the center' });
+    check('行动中心打开时新提醒不覆盖当前操作', () => assert(w.elements('bubble').classList.contains('hidden')));
+    w.elements('ac-close').dispatch('click');
+    w.handlers.stats(baseStats({ sessions: [
+      { sessionId: 'ordinary', agent: 'codex', project: 'p', state: 'working' },
+      { sessionId: 'followed', agent: 'codex', project: 'p', alias: '修登录', state: 'working', pinned: true },
+    ], workingCount: 2 }));
+    clickCat(w);
+    check('关注会话优先展示并使用别名', () => assert(w.elements('peek-list').children[0].children[1].children[0].textContent.includes('修登录')));
+    w.handlers.stats(baseStats({ workingCount: 1, recent: [{ read: false }], sessions: [
+      { sessionId: 'past', agent: 'codex', project: 'old', state: 'idle', pinned: true, archived: true },
+      { sessionId: 'current', agent: 'codex', project: 'current', state: 'working' },
+    ] }));
+    check('历史关注不能遮蔽正在执行的任务', () => assert(w.elements('peek-list').children[0].children[1].children[0].textContent.includes('current')));
+    check('普通未读记录不触发入口晃动和红色警示', () => {
+      assert(!w.elements('notepad').classList.contains('urgent'));
+      assert(!w.elements('np-badge').classList.contains('urgent'));
     });
   }
 

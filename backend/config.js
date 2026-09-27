@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { STATE_DIR } = require('./paths');
 const restPreferences = require('../shared/rest-preferences');
+const workflowPreferences = require('../shared/workflow-preferences');
 
 const CONFIG_DIR = STATE_DIR;
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
@@ -29,6 +30,8 @@ const DEFAULTS = Object.freeze({
   showCost: true,
   autoHideFullscreen: true,
   quietMinutes: 30,
+  notifications: workflowPreferences.DEFAULTS,
+  shortcuts: Object.freeze(workflowPreferences.shortcuts()),
   restReminders: restPreferences.DEFAULTS,
   xiabanTimes: DEFAULT_XIABAN_TIMES,
 });
@@ -54,6 +57,8 @@ function sanitize(raw) {
   if (typeof raw.autoHideFullscreen === 'boolean') out.autoHideFullscreen = raw.autoHideFullscreen;
   if (Number.isInteger(raw.quietMinutes) && raw.quietMinutes >= 1 && raw.quietMinutes <= 1440) out.quietMinutes = raw.quietMinutes;
   out.restReminders = restPreferences.sanitizePreferences(raw.restReminders);
+  out.notifications = workflowPreferences.notifications(raw.notifications);
+  out.shortcuts = workflowPreferences.shortcuts(raw.shortcuts);
   for (const key of ['showCat', 'showStatus', 'showQuota', 'showTokens', 'showCost']) {
     if (typeof raw[key] === 'boolean') out[key] = raw[key];
   }

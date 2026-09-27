@@ -1,0 +1,29 @@
+/* Task history and session preferences use the existing warm popup material. */
+.action-pop { max-height: min(520px, calc(100vh - 160px)); }
+.ac-scroll { min-height: 0; }
+.ac-tabs { display: flex; gap: 4px; padding: 3px; background: rgba(90,58,42,.055); border-radius: 10px; }
+.ac-tabs button { flex: 1; border: 0; border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 12px; color: #8a6552; background: transparent; cursor: pointer; }
+.ac-tabs button[aria-selected="true"] { background: #fff; color: #5a3a2a; box-shadow: 0 1px 4px rgba(90,58,42,.09); font-weight: 650; }
+.ac-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; font-size: 12px; color: #8a6552; }
+.ac-toolbar span { flex: 1; }
+.ac-small-button, .ac-toolbar button { border: 1px solid rgba(217,119,87,.24); border-radius: 7px; padding: 5px 9px; font: inherit; font-size: 12px; color: #7b4e38; background: #fffaf6; cursor: pointer; }
+.ac-small-button:hover, .ac-toolbar button:hover { background: #fbe8dc; }
+.ac-toolbar button:disabled { opacity: .45; cursor: default; }
+.ac-small-button[aria-pressed="true"] { background: #fbe8dc; border-color: #d9a181; }
+.ac-history-row, .ac-session-row { padding: 10px; margin-bottom: 7px; border: 1px solid rgba(217,119,87,.18); background: #fffaf7; border-radius: 10px; }
+.ac-history-row.unread { border-left: 3px solid #d97757; }
+.ac-row-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ac-row-title { margin: 5px 0; color: #3a2a22; font-size: 13px; font-weight: 650; overflow-wrap: anywhere; }
+.ac-event-kind { font-size: 12px; font-weight: 650; color: #24865b; }
+.ac-event-kind.failed { color: #b9473c; }
+.ac-event-kind.attention { color: #a27126; }
+.ac-row-time, .ac-row-note, .ac-empty, .ac-status { font-size: 12px; line-height: 1.5; color: #8a6552; }
+.ac-empty { margin: 8px 0; }
+.ac-status:empty { display: none; }
+.ac-row-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.ac-session-editor { border-top: 1px solid rgba(217,119,87,.2); margin-top: 10px; padding-top: 10px; }
+.ac-session-editor label { display: block; font-size: 12px; color: #7b4e38; }
+.ac-alias-input { display: block; width: 100%; margin: 5px 0 10px; padding: 8px; border: 1px solid rgba(217,119,87,.4); border-radius: 7px; background: #fff; color: #3a2a22; font: inherit; font-size: 13px; user-select: text; }
+.ac-session-editor .ac-mute-label { display: flex; align-items: center; gap: 7px; }
+.ac-mute-label input { accent-color: #a76a46; }
+.ac-row-note { margin: 4px 0; }

@@ -50,7 +50,7 @@
 
     // ── settings ────────────────────────────────────────────────────────────
     'settings.title': 'AgentPaw · AI 桌伴 · 设置',
-    'settings.subtitle': '调整休息提醒、免打扰、隐私、接入和角色表情',
+    'settings.subtitle': '调整任务提醒、快捷键、陪伴和角色表情',
     'settings.generalTab': '常规',
     'settings.expressionsTab': '角色与表情',
     'settings.startupSection': '启动设置',
@@ -313,8 +313,6 @@
     'bub.sad': '😢 别生气…',
     'bub.ack': '✨ 收到！',
     'bub.newTask': '📨 收到新任务！',
-    'bub.roundDone': '✅ 这一轮搞定啦！',
-    'bub.bigDone': '🎉 大任务搞定！({ops}步)',
     'bub.error': '😵 出了点状况，在想办法…',
     'bub.waitYou': '✋ {project} {wait}',
     'bub.needReply': '💬 {project} 等你回复',

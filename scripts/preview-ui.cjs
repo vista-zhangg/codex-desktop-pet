@@ -32,6 +32,12 @@ const sessions = [
   { id: 'demo1', agent: 'codex', state: 'working', project: 'AgentPaw', op: '调整详情面板与设置页面', model: 'gpt-5.5', createdAt: Date.now(), turnStartedAt: Date.now()-124000, contextPercent: 32 },
   { id: 'demo2', agent: 'claude', state: 'thinking', project: 'Design system', op: '检查组件与交互细节', model: 'claude-sonnet-4', createdAt: Date.now(), contextPercent: 18 },
 ];
+const { createTaskCenter, projectKey } = require('../backend/task-center');
+const workflowModel = require('../shared/workflow-preferences');
+const taskCenter = createTaskCenter();
+let workflow = { notifications: workflowModel.notifications(), shortcuts: workflowModel.shortcuts(), shortcutErrors: {} };
+let petPreview = null;
+sessions.forEach(row => { row.sessionId = row.id; row.focusable = true; row.projectKey = projectKey({ cwd: 'D:/preview/' + row.project }); });
 const daily = {};
 for (let i = 1; i < 30; i++) { const date = new Date(); date.setDate(date.getDate()-i); const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`; daily[key] = { ...today, tokens: 400000 + ((i*137231)%1500000), cost: 2+(i*1.23)%9 }; }
 const stats = { today, sessions, active: sessions[0], lifetime: { cost: 136.72, tokens: 22460000, messages: 628 },
@@ -42,10 +48,32 @@ const stats = { today, sessions, active: sessions[0], lifetime: { cost: 136.72, 
   codexQuota: { status:'ready', updatedAt:Date.now(), windows:{ fiveHour:{ remainingPercent:76, usedPercent:24, resetsAt:Math.floor(Date.now()/1000)+6200 }, weekly:{ remainingPercent:92,usedPercent:8,resetsAt:Math.floor(Date.now()/1000)+320000 } } }
 };
 const noop = () => {};
+function refreshWorkflow() {
+  Object.assign(stats, taskCenter.sync({ ...stats, sessions }, workflow.notifications));
+  if (petPreview && !petPreview.isDestroyed()) petPreview.webContents.send('pet:stats', stats);
+  return stats;
+}
+refreshWorkflow();
+for (const [index, kind] of ['done', 'failed', 'attention'].entries()) {
+  taskCenter.record({ ...sessions[index % 2], kind, eventKey: 'preview-' + index, ts: Date.now() });
+}
+refreshWorkflow();
 let companion = { quietMinutes: 30, rest: { preferences: { ...require('../shared/rest-preferences').DEFAULTS }, pending: null },
   visibility: { visible: true, autoHideFullscreen: true, quietUntil: 0 } };
 const report = { hooksEnabled:true, summary:{detected:4,ready:4,needsRepair:0,repairable:0}, integrations: ['Claude Code','Codex','TRAE','WorkBuddy','opencode','ZCode'].map((label,i)=>({label,detected:i<4,mode:i===1?'watcher':i===4?'plugin':'hook',state:i<4?'ready':'not-detected',lastEventAt:i<4?Date.now()-120000:null})) };
 const handlers = {
+  'workflow:get-preferences': () => workflow,
+  'workflow:set-preferences': (_, patch) => {
+    workflow = { ...workflow, notifications: workflowModel.notifications({ ...workflow.notifications, ...patch.notifications }),
+      shortcuts: patch.shortcuts ? workflowModel.shortcuts(patch.shortcuts) : workflow.shortcuts };
+    refreshWorkflow();
+    return { ok: true, ...workflow };
+  },
+  'workflow:update-session': (_, id, patch) => { const result = taskCenter.update(id, patch); refreshWorkflow(); return result; },
+  'workflow:mark-read': (_, ids) => { const ok = taskCenter.markRead(ids); refreshWorkflow(); return { ok }; },
+  'workflow:clear-recent': () => { const ok = taskCenter.clear(); refreshWorkflow(); return { ok }; },
+  'workflow:focus-recent': () => true,
+  'focus-session': () => true,
   'companion:get-state': () => companion,
   'companion:set-preferences': (_, value) => {
     if (value.restReminders) companion.rest.preferences = { ...companion.rest.preferences, ...value.restReminders };
@@ -155,12 +183,25 @@ app.whenReady().then(async()=>{
       assert.deepEqual(bad, [], 'role and state GIFs decoded');
       log('Character switching, GIF append and reset passed');
     }
-    for(const tab of ['general','companion','appearance','integrations','updates','expressions']) {
+    for(const tab of ['general','workflow','companion','appearance','integrations','updates','expressions']) {
       await settings.webContents.executeJavaScript(`document.getElementById('tab-${tab}').click()`);
       result.push({page:tab,...await dimensions(settings)});
       await checkReadable(settings);
       await capture(settings,'settings-'+tab);
     }
+    await settings.webContents.executeJavaScript(`document.getElementById('tab-workflow').click(); document.getElementById('notify-attention').click();`);
+    await new Promise(resolve => setTimeout(resolve,100));
+    assert.equal(workflow.notifications.mode, 'attention');
+    assert.equal(await settings.webContents.executeJavaScript(`(() => {
+      const input=document.getElementById('shortcut-peek'); input.focus();
+      input.dispatchEvent(new KeyboardEvent('keydown',{key:'c',code:'KeyC',ctrlKey:true,bubbles:true}));
+      return input.value==='' && document.getElementById('shortcut-peek-error').textContent.includes('Ctrl+Shift');
+    })()`),true,'common copy shortcut cannot be registered');
+    await settings.webContents.executeJavaScript(`document.getElementById('shortcut-peek').focus();document.getElementById('shortcut-peek').dispatchEvent(new KeyboardEvent('keydown',{key:' ',code:'Space',ctrlKey:true,shiftKey:true,bubbles:true}));document.getElementById('shortcut-save').click();`);
+    await new Promise(resolve => setTimeout(resolve,100));
+    assert.equal(workflow.shortcuts.peek, 'Ctrl+Shift+Space');
+    await settings.webContents.executeJavaScript(`document.getElementById('shortcut-save').scrollIntoView({block:'end'});void 0;`);
+    await capture(settings,'settings-workflow-shortcuts');
     await settings.webContents.executeJavaScript(`document.getElementById('tab-companion').click(); document.getElementById('rest-water-minutes').value=35; document.getElementById('rest-snooze-minutes').value=7; document.getElementById('rest-save').click();`);
     await new Promise(r=>setTimeout(r,100));
     assert.equal(companion.rest.preferences.waterMinutes,35,'custom water interval saved');
@@ -188,7 +229,7 @@ app.whenReady().then(async()=>{
       await settings.webContents.executeJavaScript(`renderChipPreview(${JSON.stringify(value)})`);
       assert(await settings.webContents.executeJavaScript(`(() => {const r=document.querySelector('.preview-compact').getBoundingClientRect();const p=document.querySelector('.capsule-preview').getBoundingClientRect();return r.width<=p.width-30})()`),'preview fits '+mask);
     }
-    for (const tab of ['general','companion','appearance','integrations','updates','expressions']) {
+    for (const tab of ['general','workflow','companion','appearance','integrations','updates','expressions']) {
       settings.setSize(720,620);
       await settings.webContents.executeJavaScript(`document.getElementById('tab-${tab}').click()`);
       result.push({page:tab+'-small',...await dimensions(settings)});
@@ -221,6 +262,7 @@ app.whenReady().then(async()=>{
     await capture(panel,'panel-small-lifetime');
     panel.destroy();
     const pet=await create('pet',520,420);
+    petPreview = pet;
     if (characterStore) {
       for (const state of ['working','thinking','talking','juggling','sweeping','loafing','waiting','needsinput','happy','greet','error','sad','sleeping']) {
         await pet.webContents.executeJavaScript(`setState('${state}')`);
@@ -234,6 +276,58 @@ app.whenReady().then(async()=>{
     }
     pet.webContents.send('pet:stats',stats);
     await capture(pet,'pet');
+    pet.setSize(520,740);
+    await pet.webContents.executeJavaScript(`openActionPop(); document.getElementById('ac-tab-recent').click();void 0;`);
+    await capture(pet,'pet-recent');
+    assert.equal(await pet.webContents.executeJavaScript(`document.querySelectorAll('.ac-history-row').length`),3);
+    assert.equal(await pet.webContents.executeJavaScript(`(() => {
+      const button=document.querySelector('.ac-history-row button'); button.focus();
+      const original=lastStats;
+      applyStats({...original,recent:[{...original.recent[0],id:'review-new-record'},...original.recent]});
+      const preserved=button.isConnected && document.activeElement===button;
+      applyStats(original); return preserved;
+    })()`),true,'incoming history preserves the current button and keyboard focus');
+    await pet.webContents.executeJavaScript(`document.getElementById('ac-read-all').click();void 0;`);
+    await new Promise(resolve => setTimeout(resolve,100));
+    assert(stats.recent.every(row => row.read));
+    assert.equal(await pet.webContents.executeJavaScript(`(() => {
+      const original=lastStats;
+      const choice={kind:'perm',permId:'review-permission',sessionId:'demo1',project:'Preview',question:'Run tests?',options:[{key:'allow',label:'允许'},{key:'deny',label:'拒绝'}]};
+      const action={actionId:'review-permission',state:'waiting',notificationsMuted:true,choice};
+      const pending={...original,waitingCount:1,actions:[action]};
+      applyStats(pending); document.getElementById('ac-tab-actions').click();
+      const button=document.querySelector('.ac-act button'); button.focus();
+      applyStats({...pending,actions:[action,{...action,actionId:'review-other',choice:{...choice,permId:'review-other'}}]});
+      const preserved=button.isConnected && document.activeElement===button;
+      showBubble('Do not cover this task');
+      const uncovered=document.getElementById('bubble').classList.contains('hidden');
+      applyStats(original);
+      const removed=!button.isConnected;
+      updateMouseHit(0,0);
+      return preserved && uncovered && removed && mouseIgnoring;
+    })()`),true,'permission refresh preserves focus, removes resolved cards and leaves blank pixels click-through');
+    await pet.webContents.executeJavaScript(`document.getElementById('ac-tab-sessions').click();[...document.querySelectorAll('.ac-session-row button')].find(el=>el.textContent==='编辑').click();document.querySelector('.ac-alias-input').value='修登录';void 0;`);
+    // Live statistics cannot erase a partially entered alias.
+    pet.webContents.send('pet:stats', stats);
+    await new Promise(resolve => setTimeout(resolve,100));
+    assert.equal(await pet.webContents.executeJavaScript(`document.querySelector('.ac-alias-input').value`),'修登录');
+    pet.webContents.send('workflow:command','peek');
+    await new Promise(resolve => setTimeout(resolve,100));
+    assert.equal(await pet.webContents.executeJavaScript(`document.querySelector('.ac-alias-input').value`),'修登录','peek shortcut cannot reset an in-progress alias');
+    await capture(pet,'pet-session-editor');
+    await pet.webContents.executeJavaScript(`[...document.querySelectorAll('.ac-session-editor button')].find(el=>el.textContent==='保存').click();void 0;`);
+    await new Promise(resolve => setTimeout(resolve,100));
+    assert(stats.sessions.some(row=>row.alias==='修登录'));
+    await pet.webContents.executeJavaScript(`[...document.querySelectorAll('.ac-session-row button')].find(el=>el.textContent==='关注').click();void 0;`);
+    await new Promise(resolve => setTimeout(resolve,100));
+    assert(stats.sessions.some(row=>row.pinned));
+    await capture(pet,'pet-sessions');
+    assert.equal(await pet.webContents.executeJavaScript(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})); document.getElementById('action-pop').classList.contains('hidden');`),true,'Escape closes the action center');
+    log('Workflow review: shortcut guard, stable permission/history focus, draft preservation, quiet bubbles and click-through passed');
+    await pet.webContents.executeJavaScript(`closeActionPop(); openPeek();void 0;`);
+    await capture(pet,'pet-followed-peek');
+    await pet.webContents.executeJavaScript(`closePeek();void 0;`);
+    pet.setSize(520,420);
     await pet.webContents.executeJavaScript(`Object.defineProperty(document,'hidden',{configurable:true,value:false}); void 0;`);
     companion.rest.pending={id:'preview-rest-cat',kinds:['water','stretch'],createdAt:Date.now()};
     pet.webContents.send('companion:state',companion);

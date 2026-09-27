@@ -12,6 +12,14 @@ const IPC = Object.freeze({
   UPDATE_STATE: 'update:state',
   PRIVACY_STATE: 'privacy:state',
   COMPANION_STATE: 'companion:state',
+  WORKFLOW_PREFERENCES: 'workflow:preferences',
+  WORKFLOW_COMMAND: 'workflow:command',
+  GET_WORKFLOW_PREFERENCES: 'workflow:get-preferences',
+  SET_WORKFLOW_PREFERENCES: 'workflow:set-preferences',
+  UPDATE_SESSION_PREFERENCES: 'workflow:update-session',
+  MARK_RECENT_READ: 'workflow:mark-read',
+  CLEAR_RECENT: 'workflow:clear-recent',
+  FOCUS_RECENT: 'workflow:focus-recent',
   GET_COMPANION_STATE: 'companion:get-state',
   SET_COMPANION_PREFS: 'companion:set-preferences',
   REST_ACTION: 'rest:action',
@@ -61,11 +69,14 @@ const IPC = Object.freeze({
 });
 
 const PUSH_CHANNELS = Object.freeze([
+  'WORKFLOW_PREFERENCES', 'WORKFLOW_COMMAND',
   'PET_EVENT', 'PET_STATS', 'PANEL_STATS', 'PANEL_PRICE', 'XIABAN_SCHEDULE',
   'PET_ASSETS', 'UPDATE_STATE', 'PRIVACY_STATE', 'COMPANION_STATE',
   'PET_POINTER_CHECK',
 ]);
 const INVOKE_CHANNELS = Object.freeze([
+  'GET_WORKFLOW_PREFERENCES', 'SET_WORKFLOW_PREFERENCES', 'UPDATE_SESSION_PREFERENCES',
+  'MARK_RECENT_READ', 'CLEAR_RECENT', 'FOCUS_RECENT',
   'GET_COMPANION_STATE', 'SET_COMPANION_PREFS', 'REST_ACTION',
   'GET_CHIP_DISPLAY', 'SET_CHIP_DISPLAY',
   'GET_STATS', 'GET_WIN_POS', 'GET_WINDOW_METRICS', 'GET_AUTO_LAUNCH',

@@ -49,6 +49,7 @@ function fixture(preferences = {}) {
       if (name === 'path') return path;
       if (name === './paths') return { STATE_DIR: 'virtual-state' };
       if (name === '../shared/rest-preferences') return restPreferences;
+      if (name === '../shared/workflow-preferences') return require('../shared/workflow-preferences');
       throw new Error(`Unexpected config dependency: ${name}`);
     },
   }, { filename: 'backend/config.js' });

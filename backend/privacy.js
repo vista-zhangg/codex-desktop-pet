@@ -19,6 +19,7 @@ function protectStats(stats, enabled) {
     ? stats.sessions.map((session) => ({
       ...session,
       project: privateProject(),
+      alias: '',
       op: null,
       choice: null,
     }))
@@ -41,6 +42,7 @@ function protectStats(stats, enabled) {
     active: stats.active ? { ...stats.active, project: privateProject() } : stats.active,
     sessions,
     actions,
+    recent: Array.isArray(stats.recent) ? stats.recent.map(row => ({ ...row, project: privateProject(), alias: '' })) : [],
     lastOps,
     // Diagnostics are not currently rendered, but may contain local source
     // paths. Keep them out of the renderer contract while privacy mode is on.

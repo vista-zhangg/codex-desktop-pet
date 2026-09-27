@@ -363,7 +363,7 @@ function renderSessList(sessions) {
       const contextSuffix = context ? ` · ${context}` : '';
       const icon = AGENT_ICON[s.agent] || AGENT_ICON.claude;
       const who = AGENT_NAME[s.agent] || 'Claude';
-      const proj = escapeHtml(s.project || '');
+      const proj = escapeHtml(s.alias || s.project || '');
       const detailTitle = `${detail}${contextSuffix}`;
       return `<div class="row sess"><span class="badge ${m.cls}">${escapeHtml(t(m.key))}</span><span class="sess-agent" title="${who}">${icon}</span><span class="sess-proj" title="${proj}">${proj}</span><span class="sess-op" title="${detailTitle}">${detail}${escapeHtml(contextSuffix)}</span></div>`;
     })

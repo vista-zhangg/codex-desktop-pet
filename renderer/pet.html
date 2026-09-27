@@ -6,6 +6,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: agentpaw-asset:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
     <link rel="stylesheet" href="ui.css" />
     <link rel="stylesheet" href="pet.css" />
+    <link rel="stylesheet" href="task-center.css" />
     <link rel="stylesheet" href="capsule.css" />
     <title>AgentPaw · AI 桌伴</title>
   </head>
@@ -66,6 +67,7 @@
         <div class="peek-actions">
           <button id="peek-focus" class="peek-focus" type="button" data-i18n="peek.focus">打开当前会话</button>
           <button id="peek-panel" class="peek-panel" type="button" data-i18n="peek.panel">查看详情</button>
+          <button id="peek-center" class="peek-panel" type="button">行动中心</button>
         </div>
       </div>
 
@@ -138,12 +140,27 @@
           <span class="ac-title" id="ac-title" data-i18n="action.title">🗒️ 行动中心</span>
           <button class="ac-close" id="ac-close" type="button" data-i18n-title="action.close" title="关闭" aria-label="关闭">✕</button>
         </div>
+        <div class="ac-tabs" role="tablist" aria-label="行动中心内容">
+          <button id="ac-tab-actions" type="button" role="tab" aria-selected="true" aria-controls="ac-act-sec">待处理</button>
+          <button id="ac-tab-recent" type="button" role="tab" aria-selected="false" aria-controls="ac-recent-sec" tabindex="-1">最近</button>
+          <button id="ac-tab-sessions" type="button" role="tab" aria-selected="false" aria-controls="ac-sessions-sec" tabindex="-1">会话</button>
+        </div>
         <div class="ac-scroll">
-          <div class="ac-sec" id="ac-act-sec">
+          <div class="ac-sec" id="ac-act-sec" role="tabpanel" aria-labelledby="ac-tab-actions">
             <div class="ac-sec-h" data-i18n="action.needYou">🔔 需要你处理</div>
             <div id="ac-acts"></div>
+            <p id="ac-empty" class="ac-empty" hidden>暂时没有需要处理的事项</p>
+          </div>
+          <div id="ac-recent-sec" role="tabpanel" aria-labelledby="ac-tab-recent" hidden>
+            <div class="ac-toolbar"><span>最近 7 天 · 最多 100 条</span><button id="ac-read-all" type="button">全部已读</button><button id="ac-clear-recent" type="button">清空</button></div>
+            <div id="ac-recent-list"></div>
+          </div>
+          <div id="ac-sessions-sec" role="tabpanel" aria-labelledby="ac-tab-sessions" hidden>
+            <p class="ac-empty">待处理和当前任务优先，同类中关注的排在前面；静音对同项目生效。</p>
+            <div id="ac-session-list"></div>
           </div>
         </div>
+        <div id="ac-status" class="ac-status" role="status" aria-live="polite"></div>
         <div class="ac-ops">
           <button data-op="panel" data-i18n="action.panel">📊 详情</button>
         </div>
@@ -158,6 +175,7 @@
     <script src="icons.js"></script>
     <script src="../shared/pet-geometry.js"></script>
     <script src="pet.js"></script>
+    <script src="task-center.js"></script>
     <script src="companion.js"></script>
   </body>
 </html>

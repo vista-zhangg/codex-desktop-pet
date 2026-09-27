@@ -65,6 +65,14 @@ function makeElement(tag, id) {
   el.removeEventListener = () => {};
   el.dispatch = (ev, arg) => { for (const fn of el._listeners[ev] || []) fn(arg || { stopPropagation() {}, preventDefault() {} }); };
   el.appendChild = (c) => { c.parentNode = el; el.children.push(c); return c; };
+  el.insertBefore = (c, before) => {
+    if (c === before) return c;
+    c.remove();
+    c.parentNode = el;
+    const index = before ? el.children.indexOf(before) : el.children.length;
+    el.children.splice(index, 0, c);
+    return c;
+  };
   el.remove = () => { if (el.parentNode) el.parentNode.children = el.parentNode.children.filter((c) => c !== el); };
   // Auto-vivify per-selector children used by the renderer.
   el._selCache = {};

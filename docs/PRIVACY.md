@@ -21,6 +21,8 @@ AgentPaw 将配置、窗口位置、运行时令牌、模型价格缓存、用�
 
 休息提醒使用系统提供的空闲时长、锁屏和休眠状态累计电脑使用时间；全屏免打扰检查前台窗口是否覆盖显示器。不会记录按键、鼠标点击内容、屏幕画面或前台窗口标题。提醒偏好和「今天跳过」日期保存在同一本机配置目录，不上传使用习惯。
 
+任务提醒偏好、静音项目的目录散列与显示名、快捷键保存在 `config.json`。`task-center.json` 保存会话别名／关注以及最近 7 天、最多 100 条事件摘要（事件类型、时间、项目显示名、Agent、会话标识、已读状态）；它不复制聊天正文、命令或权限内容，也不保存终端进程标识。最近记录可在行动中心清空。隐私模式会遮蔽这些显示名与别名，但不会停止本机记录。全局快捷键仅注册用户选择的组合，不记录其他按键。
+
 ### 网络访问
 
 常规运行中，AgentPaw 会从 [models.dev](https://models.dev) 下载公共模型价目表。Windows 版使用 Electron 网络层并继承系统代理或 PAC 设置；启动时同步一次，成功后每 24 小时刷新，失败时自动重试。该请求不携带 transcript、rollout、权限内容或用量统计。设置 `AGENTPAW_NO_NET=1` 会禁用价格同步和 Codex 额度上游连接，使 AgentPaw 保持完全离线；额度显示为 `--`。
@@ -62,6 +64,8 @@ This data powers status, session titles, context usage, token reporting, and per
 Configuration, window position, runtime token, model-price cache, usage ledgers, and Codex quota-alert dedupe keys are stored under `~/.agentpaw/`. A dedupe key contains only a window identifier and reset time, never authentication data. Hook and plugin installation is merge-safe, creates backups before changes, and removes only AgentPaw-managed entries during uninstall.
 
 Break reminders use system idle duration and lock/suspend state to count time at the computer. Fullscreen quiet mode checks whether the foreground window covers a display. Neither feature records keystrokes, click contents, screenshots, or foreground window titles. Reminder preferences and skip-for-today dates stay in the same local configuration directory; usage habits are not uploaded.
+
+Task notification preferences, muted project directory hashes and display names, and shortcut bindings are stored in `config.json`. `task-center.json` stores session aliases/follows and up to 100 event summaries for seven days (event type, timestamp, project display name, agent, session identifier and read state). It does not copy message bodies, commands, permission content, or terminal process identifiers. Clear recent events in the action center. Privacy mode masks names and aliases without stopping local recording. Global shortcuts register only the chosen key combinations; other keystrokes are not recorded.
 
 ### Network access
 

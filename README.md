@@ -11,14 +11,14 @@
   </p>
   <p>
     <a href="https://github.com/vista-zhangg/codex-desktop-pet/releases/latest"><strong>下载 Windows 安装包</strong></a> ·
-    <a href="docs/releases/1.9.2.md">1.9.2 更新说明</a> ·
+    <a href="docs/releases/1.9.3.md">1.9.3 更新说明</a> ·
     <a href="docs/介绍.md">使用指南</a>
   </p>
 
   <p>
     <a href="https://github.com/vista-zhangg/codex-desktop-pet/actions/workflows/ci.yml"><img src="https://github.com/vista-zhangg/codex-desktop-pet/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/platform-Windows%20x64-0078D4?logo=windows" alt="Windows x64 only">
-    <img src="https://img.shields.io/badge/version-1.9.2-F6A04A" alt="Version 1.9.2">
+    <img src="https://img.shields.io/badge/version-1.9.3-F6A04A" alt="Version 1.9.3">
     <a href="LICENSE"><img src="https://img.shields.io/badge/code%20license-MIT-2EA44F" alt="MIT License"></a>
   </p>
 </div>
@@ -41,6 +41,8 @@ AgentPaw · AI 桌伴让你在桌面上查看 Codex 的任务进度、5h / 7d �
 - **状态一眼可见**：工作、思考、并行、清理、等待授权、等待回复、完成、出错、摸鱼与睡眠；后台任务或定时唤醒未结束时保持运行，不提前报完成。
 - **表情自由定制**：集中查看每个状态的全部 GIF，可新增轮换、替换或移出选中项，也可一键恢复默认。
 - **原生权限卡**：Claude Code 请求授权时，可直接在桌宠上允许、拒绝或永久允许。
+- **克制的任务提醒**：标准／仅需处理两档；常规操作只更新状态，连续完成合并提示，短暂失败恢复后不再弹出。可按 Agent 或项目静音，待处理数量和权限卡仍保留。
+- **最近事件与会话偏好**：行动中心可回看最近 7 天、最多 100 条完成／失败／待处理事件，设置会话别名与关注，并返回对应任务；全局快捷键可在设置中自行配置，默认停用。
 - **统一用量面板**：聚合 token、缓存读写、上下文窗口、模型、每日趋势与 API 公价折算。
 - **无需打开 Codex 即可查额度**：启动时自动发现桌面 Codex 自带的 CLI；右键 AgentPaw 品牌托盘图标即可查看当前脱敏账户、5h / 7d 剩余量、刷新点和更新时间。缺失窗口明确显示 `--`，无需手动配置。
 - **接入自检与修复**：在设置中核对六个 Agent 的 Hook、插件或只读监听状态，可一键修复或卸载 AgentPaw 接入。

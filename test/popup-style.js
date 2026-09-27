@@ -45,8 +45,9 @@ const sessionPopupRefs = /sesslist|sl-(?:rows|sub|title|back|session-view|loot|s
 assert(!sessionPopupRefs.test(js + css + html + main + preload + config), 'session popup code and IPC must be removed');
 assert(!/左键短按[^\n]*会话|会话列表 HUD/.test(js + css + html), 'cat click must not mention the removed session window');
 
-const soundRefs = /muted|toggleMute|toggle-mute|AudioContext|webkitAudioContext|\bSOUND\b|\bbeep\s*\(/;
-assert(!soundRefs.test(js + main + preload + config), 'sound playback and mute controls must be removed');
+// Task notification muting is independent of the retired audio subsystem.
+const soundRefs = /toggleMute|toggle-mute|AudioContext|webkitAudioContext|\bSOUND\b|\bbeep\s*\(/;
+assert(!soundRefs.test(js + main + preload + config), 'sound playback and audio mute controls must be removed');
 assert(!/\.(?:mp3|wav|ogg|m4a)\b/i.test(walk(path.join(root, 'assets')).join('\n')), 'audio assets must be removed');
 
 assert(!/\bLANGS\b|\bsetLang\b|\bgetLang\b|tray\.language|lang\.(?:zh|en|ja)|cfg\.lang|config\.get\(\)\.lang/.test(main + js + panel + preload + config + i18n), 'language switching code must be removed');

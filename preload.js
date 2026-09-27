@@ -11,6 +11,10 @@ const IPC = Object.freeze({
   UPDATE_STATE: 'update:state',
   PRIVACY_STATE: 'privacy:state',
   COMPANION_STATE: 'companion:state', GET_COMPANION_STATE: 'companion:get-state',
+  WORKFLOW_PREFERENCES: 'workflow:preferences', WORKFLOW_COMMAND: 'workflow:command',
+  GET_WORKFLOW_PREFERENCES: 'workflow:get-preferences', SET_WORKFLOW_PREFERENCES: 'workflow:set-preferences',
+  UPDATE_SESSION_PREFERENCES: 'workflow:update-session', MARK_RECENT_READ: 'workflow:mark-read',
+  CLEAR_RECENT: 'workflow:clear-recent', FOCUS_RECENT: 'workflow:focus-recent',
   SET_COMPANION_PREFS: 'companion:set-preferences', REST_ACTION: 'rest:action', OPEN_HIDE_MENU: 'pet:hide-menu',
   GET_UPDATE_STATE: 'update:get-state', CHECK_FOR_UPDATES: 'update:check', SET_AUTO_UPDATE: 'update:set-auto',
   DOWNLOAD_UPDATE: 'update:download', INSTALL_UPDATE: 'update:install', OPEN_UPDATE_PAGE: 'update:open-page',
@@ -32,6 +36,14 @@ const IPC = Object.freeze({
 });
 
 contextBridge.exposeInMainWorld('pet', {
+  onWorkflowPreferences: cb => ipcRenderer.on(IPC.WORKFLOW_PREFERENCES, (_e, value) => cb(value)),
+  onWorkflowCommand: cb => ipcRenderer.on(IPC.WORKFLOW_COMMAND, (_e, value) => cb(value)),
+  getWorkflowPreferences: () => ipcRenderer.invoke(IPC.GET_WORKFLOW_PREFERENCES),
+  setWorkflowPreferences: value => ipcRenderer.invoke(IPC.SET_WORKFLOW_PREFERENCES, value),
+  updateSessionPreferences: (id, value) => ipcRenderer.invoke(IPC.UPDATE_SESSION_PREFERENCES, id, value),
+  markRecentRead: ids => ipcRenderer.invoke(IPC.MARK_RECENT_READ, ids),
+  clearRecent: () => ipcRenderer.invoke(IPC.CLEAR_RECENT),
+  focusRecent: id => ipcRenderer.invoke(IPC.FOCUS_RECENT, id),
   // 主进程 -> 渲染进程
   onEvent: (cb) => ipcRenderer.on(IPC.PET_EVENT, (_e, data) => cb(data)),
   onStats: (cb) => ipcRenderer.on(IPC.PET_STATS, (_e, data) => cb(data)),
