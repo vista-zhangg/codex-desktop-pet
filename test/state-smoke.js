@@ -8,6 +8,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const { loadRenderer } = require('./dom-stub');
 const States = require('../shared/states');
 const PetAssets = require('../shared/pet-assets');
@@ -440,6 +441,39 @@ async function main() {
       assert(!actionWorld.elements('action-pop').classList.contains('hidden'));
       assert.strictEqual(actionWorld.elements('ac-acts').children.length, 2);
     });
+    actionWorld.window.dispatch('mousemove', { clientX: -1, clientY: -1 });
+    check('移出面板仅恢复点击穿透，不自动关闭行动中心', () => {
+      assert(!actionWorld.elements('action-pop').classList.contains('hidden'));
+      assert(vm.runInContext('mouseIgnoring', actionWorld.sandbox));
+    });
+    actionWorld.window.dispatch('blur');
+    check('点击其他窗口后行动中心收起，不替用户处理待办', () => {
+      assert(actionWorld.elements('action-pop').classList.contains('hidden'));
+      assert(!actionWorld.calls.some(call => call[0] === 'decidePermission'));
+    });
+    actionWorld.elements('notepad').dispatch('click');
+    check('失焦收起后仍能重新打开，待处理事项完整保留', () => {
+      assert(!actionWorld.elements('action-pop').classList.contains('hidden'));
+      assert.strictEqual(actionWorld.elements('ac-acts').children.length, 2);
+    });
+    for (const [name, open, visible] of [
+      ['授权面板', 'showAskPanel()', 'askActive'],
+      ['工作速览', 'openPeek()', 'peekOpen'],
+      ['额度面板', 'quotaEl.hidden = false; openQuotaPopover()', 'quotaPopoverOpen'],
+    ]) {
+      vm.runInContext(`closeActionPop(); ${open}`, actionWorld.sandbox);
+      check(`${name}可正常打开`, () => assert(vm.runInContext(visible, actionWorld.sandbox)));
+      actionWorld.calls.length = 0;
+      vm.runInContext('openActionPop()', actionWorld.sandbox);
+      check(`${name}切换行动中心不主动失焦`, () => {
+        assert(!actionWorld.elements('action-pop').classList.contains('hidden'));
+        assert(!vm.runInContext(visible, actionWorld.sandbox));
+        assert(!actionWorld.calls.some(call => call[0] === 'blurPet'));
+      });
+      actionWorld.window.dispatch('blur');
+      check(`${name}切换后的行动中心仍可失焦收起`, () =>
+        assert(actionWorld.elements('action-pop').classList.contains('hidden')));
+    }
 
   const sameSessionWorld = world();
     sameSessionWorld.elements('peek').classList.add('hidden');

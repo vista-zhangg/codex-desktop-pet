@@ -1,6 +1,6 @@
 {
   "name": "agentpaw",
-  "version": "1.9.4",
+  "version": "1.9.5",
   "description": "AgentPaw · AI 桌伴：支持 Codex、Claude Code、TRAE、WorkBuddy、opencode、ZCode 的 Windows AI 桌宠与编程助手。多角色切换、自定义 GIF、任务状态提醒、Codex 订阅额度监控、token 用量统计与休息提醒。AI desktop pet, coding agent companion, task notifications and usage monitor.",
   "keywords": [
     "codex",

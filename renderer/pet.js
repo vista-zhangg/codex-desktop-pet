@@ -1077,13 +1077,17 @@ async function gotoSession(choice) {
   requestSessionFocus(choice.sessionId || '');
 }
 
-function hideAsk() {
+function hideAsk({ keepFocus = false } = {}) {
   lastAskSig = '';
   elic = null;
   askEl.classList.add('hidden');
   askHover = false;
   if (askText) askText.value = ''; // 清掉草稿，避免关闭后仍被判为「交互中」冻住状态
-  if (askActive) { askActive = false; resetPetSize(); window.pet.blurPet(); }
+  if (askActive) {
+    askActive = false;
+    resetPetSize();
+    if (!keepFocus) window.pet.blurPet();
+  }
 }
 
 // ---------- 记事本 / 行动中心 ----------
@@ -1218,9 +1222,11 @@ function openActionPop() {
   bubbleTimer = null;
   bubble.classList.add('hidden');
   if (window.AgentPawCompanion) window.AgentPawCompanion.hide();
-  if (askActive) hideAsk(); // 别和选项面板抢窗口
-  if (peekOpen) closePeek();
-  if (quotaPopoverOpen) closeQuotaPopover();
+  // Switching panels keeps focus so the old panel's async blur cannot dismiss
+  // the action center immediately after it opens.
+  if (askActive) hideAsk({ keepFocus: true });
+  if (peekOpen) closePeek({ keepFocus: true });
+  if (quotaPopoverOpen) closeQuotaPopover({ keepFocus: true });
   renderActionPop();
   actionPop.classList.remove('hidden');
   actionPopOpen = true;
@@ -1465,14 +1471,14 @@ function openPeek() {
   armPeekTimer();
 }
 
-function closePeek() {
+function closePeek({ keepFocus = false } = {}) {
   if (!peekOpen) return;
   clearPeekTimer();
   peekEl.classList.add('hidden');
   peekOpen = false;
   peekLayoutSig = '';
   peekPrimarySessionId = '';
-  window.pet.blurPet();
+  if (!keepFocus) window.pet.blurPet();
   if (!askActive && !actionPopOpen) resetPetSize();
 }
 
@@ -2193,7 +2199,7 @@ function startQuotaPopoverClock() {
   if (quotaPopoverRefreshTimer && typeof quotaPopoverRefreshTimer.unref === 'function') quotaPopoverRefreshTimer.unref();
 }
 
-function closeQuotaPopover() {
+function closeQuotaPopover({ keepFocus = false } = {}) {
   clearQuotaPopoverCloseTimer();
   if (quotaPopoverRefreshTimer) clearInterval(quotaPopoverRefreshTimer);
   quotaPopoverRefreshTimer = null;
@@ -2201,7 +2207,7 @@ function closeQuotaPopover() {
   if (quotaPopover) quotaPopover.classList.add('hidden');
   quotaPopoverOpen = false;
   if (quotaEl) quotaEl.setAttribute('aria-expanded', 'false');
-  window.pet.blurPet();
+  if (!keepFocus) window.pet.blurPet();
   resetPetSize();
 }
 
@@ -3006,6 +3012,7 @@ function toggleRadial() {
 // 点遮罩空白处关闭
 radial.addEventListener('click', () => closeRadial());
 window.addEventListener('blur', () => {
+  if (actionPopOpen) closeActionPop();
   if (radialOpen) closeRadial();
   if (peekOpen) closePeek();
   if (quotaPopoverOpen) closeQuotaPopover();
