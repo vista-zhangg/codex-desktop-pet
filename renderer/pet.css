@@ -244,35 +244,34 @@ html, body {
 
 /* ---------- 记事本（行动中心入口） ---------- */
 .notepad {
-  position: absolute; right: 44px; bottom: 96px; z-index: 6;
-  width: 38px; height: 38px; cursor: pointer; -webkit-app-region: no-drag;
-  display: flex; align-items: center; justify-content: center;
-  background: #fff7f2; border: 1.5px solid #d97757; border-radius: 9px;
-  box-shadow: 0 4px 12px rgba(120, 60, 35, 0.3);
-  transform: rotate(-8deg); transition: transform 0.15s ease;
+  flex: 0 0 auto; align-self: stretch; min-height: 24px; cursor: pointer; -webkit-app-region: no-drag;
+  display: inline-flex; align-items: center; gap: 4px;
+  margin: -2px -4px -2px 0; padding: 2px 4px 2px 6px; border-left: 1px solid #ffe9dc40;
+  color: #ffdbc0; border-radius: 3px;
 }
-.notepad.urgent { animation: npRaise 2.4s ease-in-out 2; }
-@media (prefers-reduced-motion: reduce) { .notepad.urgent { animation: none; } }
-.notepad:hover { transform: rotate(-8deg) scale(1.12); }
+.notepad:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.chip .notepad:focus-visible { outline-offset: -2px; }
 .notepad.hidden { display: none; }
-.np-icon { font-size: 20px; line-height: 1; }
+.np-icon { font-size: 14px; line-height: 1; }
 .np-badge {
-  position: absolute; top: -7px; right: -7px; min-width: 17px; height: 17px;
-  padding: 0 4px; border-radius: 9px; background: #d97757; color: #fff;
-  font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px;
+  background: rgba(255, 233, 220, 0.18); color: #ffe9dc;
+  font-size: 10px; font-weight: 700; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
 }
-.np-badge.urgent { background: #e5484d; } /* 有「需处理」事项时红色 */
-@keyframes npRaise { 0%, 100% { transform: rotate(-8deg) translateY(0); } 50% { transform: rotate(-8deg) translateY(-4px); } }
+.np-badge.urgent { background: #c65340; color: #fff; }
 
 /* ---------- 记事本行动中心：占一大块，不挤在打工猫小范围 ---------- */
 .action-pop {
-  position: absolute; top: 14px; left: 12px; right: 12px;
-  max-height: calc(100vh - 120px); z-index: 30; -webkit-app-region: no-drag;
+  position: absolute; bottom: var(--action-pop-inset, 200px); left: 12px; right: 12px;
+  max-height: min(520px, calc(100vh - var(--action-pop-inset, 200px) - 14px));
+  z-index: 30; -webkit-app-region: no-drag;
   background: rgba(255, 255, 255, 0.985); border: 1px solid rgba(217, 119, 87, 0.45);
   border-radius: 15px; box-shadow: 0 10px 30px rgba(120, 60, 35, 0.38);
   padding: 11px 13px; display: flex; flex-direction: column; gap: 8px;
   animation: askIn 0.22s ease;
 }
+#stage.edge-below .action-pop { top: var(--action-pop-inset, 200px); bottom: auto; }
 .action-pop.hidden { display: none; }
 .ac-top { display: flex; align-items: center; gap: 8px; }
 .ac-title { font-size: 13px; font-weight: 700; color: #3a2a22; flex: 1; }

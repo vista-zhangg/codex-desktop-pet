@@ -1,5 +1,4 @@
 /* Task history and session preferences use the existing warm popup material. */
-.action-pop { max-height: min(520px, calc(100vh - 160px)); }
 .ac-scroll { min-height: 0; }
 .ac-tabs { display: flex; gap: 4px; padding: 3px; background: rgba(90,58,42,.055); border-radius: 10px; }
 .ac-tabs button { flex: 1; border: 0; border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 12px; color: #8a6552; background: transparent; cursor: pointer; }

@@ -342,6 +342,53 @@ app.whenReady().then(async()=>{
     await pet.webContents.executeJavaScript(`document.getElementById('chip-quota').click()`);
     pet.webContents.send('pet:stats',{...stats,chipDisplay:{...defaults,showCat:false,showTokens:true}});
     await capture(pet,'pet-compact');
+    // Exercise the actual CSS at the minimum frame size: shrinking the window
+    // alone cannot remove the gap left by the old absolute top position.
+    pet.setSize(520,340);
+    await pet.webContents.executeJavaScript(`window.previewScreenYDescriptor=Object.getOwnPropertyDescriptor(window,'screenY'); void 0;`);
+    const checkCompactActionCenter = async (name, vertical, overflowing) => {
+      await capture(pet,name);
+      const layout = await pet.webContents.executeJavaScript(`(() => {
+        const panel=actionPop.getBoundingClientRect(), row=compactRow.getBoundingClientRect();
+        const below=stage.classList.contains('edge-below');
+        const gap=below ? panel.top-row.bottom : row.top-panel.bottom;
+        const scroll=actionPop.querySelector('.ac-scroll');
+        const footer=actionPop.querySelector('.ac-ops').getBoundingClientRect();
+        updateMouseHit(row.left+row.width/2,below ? row.bottom+gap/2 : row.top-gap/2);
+        const gapPassesThrough=mouseIgnoring;
+        updateMouseHit(panel.left+20,panel.top+20);
+        return {below,gap,gapPassesThrough,panelInteractive:!mouseIgnoring,
+          inBounds:panel.top>=0 && panel.bottom<=innerHeight && panel.left>=0 && panel.right<=innerWidth,
+          footerVisible:footer.top>=panel.top && footer.bottom<=panel.bottom,
+          overflowing:scroll.scrollHeight>scroll.clientHeight};
+      })()`);
+      assert.equal(layout.below,vertical==='below',name+': opens on the available side');
+      assert(Math.abs(layout.gap-10)<=1,name+': panel stays close to the capsule: '+JSON.stringify(layout));
+      assert(layout.inBounds && layout.footerVisible,name+': panel and footer remain inside the window');
+      assert(layout.gapPassesThrough && layout.panelInteractive,name+': gap passes clicks through and panel accepts clicks');
+      assert.equal(layout.overflowing,overflowing,name+': long content scrolls inside the panel');
+    };
+    for (const vertical of ['above','below']) {
+      await pet.webContents.executeJavaScript(`
+        Object.defineProperty(window,'screenY',{configurable:true,value:${vertical==='above'?1000:0}});
+        setStageEdgeLayout({vertical:'${vertical}',horizontal:'center'});
+        applyStats({...lastStats,recent:[]});
+        openActionPop(); document.getElementById('ac-tab-recent').click(); void 0;
+      `);
+      await checkCompactActionCenter('pet-compact-actions-empty-'+vertical,vertical,false);
+      await pet.webContents.executeJavaScript(`applyStats({...lastStats,recent:${JSON.stringify(stats.recent)}}); void 0;`);
+      await checkCompactActionCenter('pet-compact-actions-history-'+vertical,vertical,true);
+    }
+    await pet.webContents.executeJavaScript(`applyStats({...lastStats,chipDisplay:{...lastStats.chipDisplay,showCat:true}}); void 0;`);
+    await new Promise(resolve=>setTimeout(resolve,100));
+    assert.equal(await pet.webContents.executeJavaScript(`Math.round(actionPop.getBoundingClientRect().top-compactRow.getBoundingClientRect().bottom)`),10,
+      'visible pet action center also clears the complete status stack');
+    await pet.webContents.executeJavaScript(`applyStats({...lastStats,chipDisplay:{...lastStats.chipDisplay,showCat:false}}); void 0;`);
+    await checkCompactActionCenter('pet-compact-actions-toggle','below',true);
+    await pet.webContents.executeJavaScript(`closeActionPop(); Object.defineProperty(window,'screenY',window.previewScreenYDescriptor); delete window.previewScreenYDescriptor; void 0;`);
+    pet.setSize(520,420);
+    log('Compact action center: both directions, empty and scrolling content, live visibility changes and click-through passed');
+    await require('./check-notepad-layout.cjs')(pet,{stats,defaults,capture,log});
     companion.rest.pending={id:'preview-rest-capsule',kinds:['water'],createdAt:Date.now()};
     pet.webContents.send('companion:state',companion);
     await capture(pet,'pet-compact-rest');

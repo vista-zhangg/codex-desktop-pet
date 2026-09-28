@@ -126,13 +126,12 @@
           <span id="chip-cost-sep" class="chip-sep">·</span>
           <span id="chip-cost" class="chip-cost">$0.000</span>
           <button id="rest-pending" class="rest-pending" type="button" hidden>♡ 休息一下</button>
+          <!-- 行动中心入口随胶囊排版，图标与数量都保留在自己的空间内。 -->
+          <div id="notepad" class="notepad hidden" role="button" tabindex="0" aria-label="行动中心" data-i18n-title="action.notepadTitle" title="行动中心">
+            <span class="np-icon" aria-hidden="true">📋</span>
+            <span id="np-badge" class="np-badge"></span>
+          </div>
         </div>
-      </div>
-
-      <!-- 记事本：有待处理事项时显示，点击打开行动中心 -->
-      <div id="notepad" class="notepad hidden" role="button" tabindex="0" aria-label="行动中心" data-i18n-title="action.notepadTitle" title="行动中心">
-        <span class="np-icon">📋</span>
-        <span id="np-badge" class="np-badge"></span>
       </div>
 
       <div id="action-pop" class="action-pop hidden" role="dialog" aria-labelledby="ac-title">

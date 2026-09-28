@@ -242,4 +242,17 @@ for (const [label, petRect, direction] of [
   }
 }
 
+for (const topEdge of [true, false]) {
+  const petRect = { x: 205, y: topEdge ? 0 : 170, width: 120, height: 120 };
+  const stackRect = { x: 5, y: topEdge ? 0 : 155, width: 320, height: topEdge ? 166 : 181 };
+  const result = geometry.cornerMenuLayout({ petRect, stackRect,
+    safeRect: { x: 5, y: 5, width: 320, height: 330 }, itemRadius: 26, gap: 10 });
+  for (const point of result.points) {
+    const besidePet = point.x + 26 <= petRect.x || point.x - 26 >= petRect.x + petRect.width;
+    const insidePetBand = point.y - 26 >= petRect.y && point.y + 26 <= petRect.y + petRect.height;
+    const outsideStack = point.y + 26 <= stackRect.y - 10 || point.y - 26 >= stackRect.y + stackRect.height + 10;
+    assert(outsideStack || (besidePet && insidePetBand), 'corner menu clears the capsule and status dots');
+  }
+}
+
 console.log('pet edge geometry checks passed');

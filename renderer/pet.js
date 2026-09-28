@@ -452,7 +452,7 @@ const choiceKey = (c) => {
   return (c.sessionId || '') + '|' + (c.project || '') + '|' + (c.question || '');
 };
 
-// 动态定高：弹层贴 pet 上方(bottom:200)，把窗口高度调到刚好容纳内容，
+// 动态定高：按弹层内容和可见锚点预留空间，
 // 避免固定大窗口留白 / 顶屏被下移。先扩到目标宽度再量高度：如果在基础
 // 320px 窄窗里先测，长文本会被过度换行，错误地把弹层撑到整屏高。
 const POPUP_W = 520;
@@ -498,6 +498,7 @@ function setStageEdgeLayout(next) {
   stage.classList.toggle('edge-below', edgeLayout.vertical === 'below');
   stage.classList.toggle('edge-left', edgeLayout.horizontal === 'left');
   stage.classList.toggle('edge-right', edgeLayout.horizontal === 'right');
+  if (actionPopOpen) positionActionPop();
   if (propEl && propEl.classList.contains('on')) positionProp();
 }
 
@@ -587,6 +588,18 @@ function popupEdgeLayout(height, popupHeight) {
   });
 }
 
+function positionActionPop() {
+  const rowRect = compactRow.getBoundingClientRect();
+  const stageRect = stage.getBoundingClientRect();
+  const inset = Math.ceil(Math.max(0, edgeLayout.vertical === 'below'
+    ? rowRect.bottom - stageRect.top
+    : stageRect.bottom - rowRect.top));
+  // Follow the whole visible stack (pet, dots and capsule) on either side,
+  // including when the minimum frame leaves extra transparent space.
+  actionPop.style.setProperty('--action-pop-inset', `${inset + 10}px`);
+  return inset;
+}
+
 function setRequestedPetSize(w, h, options = {}) {
   const width = Number(w) || 0;
   const height = Number(h) || 0;
@@ -654,7 +667,8 @@ function fitPopup(el) {
       const contentH = el.scrollHeight;
       el.style.maxHeight = prev;
       const viewportH = el === askEl || el === actionPop ? Math.min(contentH, ASK_VIEWPORT_MAX_H) : contentH;
-      const winH = Math.max(340, POPUP_BOTTOM + viewportH + 24);
+      const popupBottom = el === actionPop ? positionActionPop() : POPUP_BOTTOM;
+      const winH = Math.max(340, popupBottom + viewportH + 24);
       setRequestedPetSize(popupW, winH, { popup: true, popupHeight: viewportH });
     };
 
@@ -1095,13 +1109,13 @@ function updateNotepad(s) {
   const acts = actionableItems();
   const pendingCount = Math.max(acts.length, (s.waitingCount || 0) + (s.needsinputCount || 0));
   const unread = (s.recent || []).filter(row => !row.read).length;
-  notepad.classList.toggle('urgent', pendingCount > 0);
   if (!pendingCount && !unread) {
     notepad.classList.add('hidden');
   } else {
     notepad.classList.remove('hidden');
     npBadge.textContent = pendingCount || unread;
     npBadge.classList.toggle('urgent', pendingCount > 0);
+    notepad.setAttribute('aria-label', `行动中心：${pendingCount ? `${pendingCount} 项待处理` : `${unread} 条未读记录`}`);
   }
   if (actionPopOpen) { renderActionPop(); fitPopup(actionPop); }
 }
@@ -2568,9 +2582,10 @@ function attachDrag(el, options = {}) {
   el.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     if (options.hiddenOnly && catVisible) return;
-    // In compact mode the capsule remains a drag handle, but its quota group
-    // is a separate deliberate click target and must not start a drag gesture.
-    if (el === chip && e.target && e.target.closest && (e.target.closest('#chip-quota') || e.target.closest('#rest-pending'))) return;
+    // Inline controls keep their own click/keyboard actions when the capsule
+    // becomes the drag handle; pressing one must not capture its pointer.
+    if (el === chip && e.target && e.target.closest
+      && e.target.closest('#chip-quota, #rest-pending, #notepad')) return;
     if (window.AgentPawCompanion) window.AgentPawCompanion.hide();
     try { el.setPointerCapture(e.pointerId); } catch {}
     el.classList.add('dragging');
@@ -2916,11 +2931,13 @@ function buildRadial(metrics = null) {
   else preferred.push('above');
   preferred.push(edgeLayout.vertical === 'below' ? 'above' : 'below');
   const petLocalRect = { x: r.left - sr.left, y: r.top - sr.top, width: r.width, height: r.height };
+  const stack = compactRow.getBoundingClientRect();
   const layout = window.PetGeometry
     ? window.PetGeometry.cornerMenuLayout({
       count: n,
       center: { x: cx, y: cy },
       petRect: petLocalRect,
+      stackRect: { x: stack.left - sr.left, y: stack.top - sr.top, width: stack.width, height: stack.height },
       safeRect,
       preferred,
       itemRadius: 26,
@@ -3059,6 +3076,7 @@ setMouseIgnore(true);
 window.addEventListener('resize', () => requestAnimationFrame(() => {
   positionBubbleTip();
   positionQuotaPopoverTip();
+  if (actionPopOpen) positionActionPop();
   if (propEl && propEl.classList.contains('on')) positionProp();
   if (radialOpen && !catVisible) positionCompactRadial();
   if (radialOpen && catVisible) scheduleRadialRelayout();

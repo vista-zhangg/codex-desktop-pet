@@ -203,19 +203,21 @@
   // Compact L-shaped cluster of buttons in one diagonal quadrant around the
   // pet. Picks the quadrant with the most available room so the buttons sit
   // close to the pet without covering it or spilling off-screen.
-  function cornerMenuLayout({ center, petRect, safeRect, itemRadius = 26, gap = 8, preferred = [] }) {
+  function cornerMenuLayout({ center, petRect, stackRect = petRect, safeRect, itemRadius = 26, gap = 8, preferred = [] }) {
     const safe = normalizeRect(safeRect);
     const pet = normalizeRect(petRect);
+    const stack = normalizeRect(stackRect);
+    const stackTop = Math.min(pet.y, stack.y);
+    const stackBottom = Math.max(pet.bottom, stack.bottom);
     const cx = pet.x + pet.width / 2;
     const cy = pet.y + pet.height / 2;
     const halfW = pet.width / 2;
-    const halfH = pet.height / 2;
     const offset = itemRadius * 0.85; // shift the two arm buttons toward the corner
 
-    // Distance from each pet edge to the safe-rect boundary — the room
-    // available for a button cluster on that side.
-    const roomTop = Math.max(0, pet.y - safe.y);
-    const roomBottom = Math.max(0, safe.bottom - pet.bottom);
+    // Vertical clearance includes the dots and capsule; horizontal clearance
+    // stays relative to the pet so the side arm remains close to its body.
+    const roomTop = Math.max(0, stackTop - safe.y);
+    const roomBottom = Math.max(0, safe.bottom - stackBottom);
     const roomLeft = Math.max(0, pet.x - safe.x);
     const roomRight = Math.max(0, safe.right - pet.right);
 
@@ -236,7 +238,9 @@
     };
     for (const q of quadrants) {
       const outerX = cx + q.sx * (halfW + itemRadius + gap);
-      const outerY = cy + q.sy * (halfH + itemRadius + gap);
+      // The horizontal arm clears the status dots/capsule too; the side arm
+      // stays beside the pet, keeping the menu compact at screen corners.
+      const outerY = q.sy > 0 ? stackBottom + itemRadius + gap : stackTop - itemRadius - gap;
       q.points = [
         { x: cx + q.sx * offset, y: outerY },
         { x: outerX, y: outerY },

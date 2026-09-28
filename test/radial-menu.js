@@ -14,6 +14,7 @@ async function main() {
   let petLeft = 200;
   elements('stage').getBoundingClientRect = () => ({ left: 0, top: 0, width: window.innerWidth, height: 340 });
   elements('cat').getBoundingClientRect = () => ({ left: petLeft, top: 155, width: 120, height: 120 });
+  elements('compact-row').getBoundingClientRect = () => ({ left: 0, top: 140, width: window.innerWidth, height: 180 });
   window.innerWidth = 320;
   window.innerHeight = 340;
   window.screenX = 1000;
