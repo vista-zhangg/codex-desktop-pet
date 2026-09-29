@@ -2,6 +2,8 @@
 
 const assert = require('assert');
 const vm = require('vm');
+const fs = require('fs');
+const path = require('path');
 const { loadRenderer } = require('./dom-stub');
 
 async function main() {
@@ -26,7 +28,7 @@ async function main() {
   });
   const centers = () => radial.children.map((item) => ({ x: parseFloat(item.style.left), y: parseFloat(item.style.top) }));
   const assertInside = () => {
-    assert.equal(radial.children.length, 3);
+    assert.equal(radial.children.length, 4);
     for (const point of centers()) {
       assert(point.x >= 31 && point.x <= 289, 'menu button must fit the current 320px viewport');
       assert(point.y >= 31 && point.y <= 309, 'menu button must fit vertically');
@@ -56,7 +58,33 @@ async function main() {
   assert.equal(radial.dataset.direction, 'top-left');
   assertInside();
 
-  console.log('Radial menu bounds and resize checks passed.');
+  let settingsOpened = 0;
+  window.pet.openSettings = () => settingsOpened++;
+  for (const id of ['peek-settings', 'ac-settings']) {
+    vm.runInContext('peekOpen = true; actionPopOpen = true', sandbox);
+    elements(id).dispatch('click');
+    assert.equal(vm.runInContext('peekOpen || actionPopOpen || radialOpen', sandbox), false,
+      'settings entry closes transient surfaces');
+  }
+  vm.runInContext('MENU[3].act(); COMPACT_MENU[2].act()', sandbox);
+  assert.equal(settingsOpened, 4, 'both headers and both menus open settings');
+  // Exercise the main-process sender guard, not just the exposed bridge.
+  const mainSource = fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8');
+  const route = mainSource.match(/  ipcMain.on\(IPC.OPEN_SETTINGS,[\s\S]*?\n  \}\);/)[0];
+  let handler, opened = 0;
+  vm.runInNewContext(route, {
+    IPC: { OPEN_SETTINGS: 'open-settings' }, ipcMain: { on: (_, fn) => { handler = fn; } },
+    senderPetWin: e => e.sender === 'pet', openSettings: () => opened++,
+  });
+  handler({ sender: 'foreign' }); handler({ sender: 'pet' });
+  assert.equal(opened, 1, 'only pet windows can use the settings entry');
+  const existingWindowBranch = mainSource.slice(mainSource.indexOf('function openSettings()'), mainSource.indexOf('  const win = new BrowserWindow', mainSource.indexOf('function openSettings()')));
+  let shown = 0, focused = 0;
+  vm.runInNewContext(existingWindowBranch + '}; openSettings(); openSettings();', {
+    settingsWin: { isDestroyed: () => false, show: () => shown++, focus: () => focused++ },
+  });
+  assert.equal(shown, 2); assert.equal(focused, 2, 'existing settings window is reused and focused');
+  console.log('Radial menu bounds, settings entries and window reuse checks passed.');
   process.exit(0); // pet.js keeps animation and refresh timers alive.
 }
 

@@ -56,6 +56,7 @@ const IPC = Object.freeze({
   CREATE_PET_CHARACTER: 'pet-character:create',
   IMPORT_PET_CHARACTER: 'pet-character:import',
   REMOVE_PET_CHARACTER: 'pet-character:remove',
+  OPEN_SETTINGS: 'open-settings',
   CLOSE_SETTINGS: 'close-settings',
   SET_PANEL_HEIGHT: 'set-panel-height',
   CLOSE_PET: 'close-pet',
@@ -90,7 +91,7 @@ const INVOKE_CHANNELS = Object.freeze([
 ]);
 const COMMAND_CHANNELS = Object.freeze([
   'OPEN_HIDE_MENU',
-  'SET_WIN_POS', 'END_WIN_DRAG', 'OPEN_PANEL', 'CLOSE_PANEL', 'CLOSE_SETTINGS', 'SET_PANEL_HEIGHT',
+  'SET_WIN_POS', 'END_WIN_DRAG', 'OPEN_PANEL', 'CLOSE_PANEL', 'OPEN_SETTINGS', 'CLOSE_SETTINGS', 'SET_PANEL_HEIGHT',
   'CLOSE_PET', 'SET_PET_SIZE', 'PET_BLUR',
   'SET_IGNORE_MOUSE', 'QUOTA_ALERT_SHOWN',
 ]);

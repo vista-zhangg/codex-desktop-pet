@@ -47,7 +47,7 @@ html, body {
 #stage.edge-below .peek { order: 4; margin-top: 8px; margin-bottom: 0; }
 #stage.edge-below .rest-card { order: 4; margin-top: 10px; margin-bottom: 0; }
 
-.rest-card { flex: 0 0 auto; width: 290px; max-width: calc(100vw - 16px); margin-bottom: 10px; padding: 14px; border: 1px solid rgba(217,119,87,.35); border-radius: 15px; background: rgba(255,250,245,.98); color: #5a3a2a; box-shadow: 0 8px 24px rgba(120,60,35,.18); -webkit-app-region: no-drag; }
+.rest-card { flex: 0 0 auto; width: max-content; max-width: min(290px, calc(100vw - 16px)); overflow-wrap: anywhere; margin-bottom: 10px; padding: 14px; border: 1px solid rgba(217,119,87,.35); border-radius: 15px; background: rgba(255,250,245,.98); color: #5a3a2a; box-shadow: 0 8px 24px rgba(120,60,35,.18); -webkit-app-region: no-drag; }
 .rest-card.hidden { display: none; }
 .rest-card-heading { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #987361; }
 .rest-card-mark { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; background: #fce9de; color: #ba7054; border-radius: 7px; font-size: 17px; }
@@ -105,7 +105,9 @@ html, body {
 
 /* ---------- 选项面板（点选答案） ---------- */
 .ask {
-  max-width: 290px;
+  width: max-content;
+  max-width: min(290px, calc(100vw - 24px));
+  overflow-wrap: anywhere;
   margin-bottom: 10px;
   padding: 11px 13px;
   background: rgba(255, 255, 255, 0.98);
@@ -152,7 +154,10 @@ html, body {
 
 /* ---------- 左键工作速览 ---------- */
 .peek {
-  width: min(320px, calc(100vw - 24px));
+  width: max-content;
+  min-width: min(300px, calc(100vw - 24px));
+  max-width: min(320px, calc(100vw - 24px));
+  overflow-wrap: anywhere;
   margin-bottom: 10px;
   padding: 12px 13px 11px;
   background: rgba(255, 252, 249, 0.985);
@@ -184,12 +189,6 @@ html, body {
 .peek-heading { flex: 1 1 auto; min-width: 0; }
 .peek-title { font-size: 13.5px; line-height: 1.25; font-weight: 750; color: #3a2a22; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .peek-subtitle { margin-top: 2px; font-size: 10.5px; line-height: 1.25; color: #a06d55; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.peek-close {
-  width: 24px; height: 24px; border: none; border-radius: 7px; flex: 0 0 auto;
-  background: rgba(217, 119, 87, 0.08); color: #a96b4d; cursor: pointer;
-  -webkit-app-region: no-drag;
-}
-.peek-close:hover { background: rgba(217, 119, 87, 0.18); color: #d15f3d; }
 .peek-list { display: flex; flex-direction: column; gap: 5px; }
 .peek-list:empty { display: none; }
 .peek-row {
@@ -263,20 +262,23 @@ html, body {
 
 /* ---------- 记事本行动中心：占一大块，不挤在打工猫小范围 ---------- */
 .action-pop {
-  position: absolute; bottom: var(--action-pop-inset, 200px); left: 12px; right: 12px;
+  position: absolute; bottom: var(--action-pop-inset, 200px); left: 0; right: 0;
+  width: max-content; max-width: calc(100vw - 24px); margin-inline: auto;
+  min-width: min(320px, calc(100vw - 24px));
+  overflow-wrap: anywhere;
   max-height: min(520px, calc(100vh - var(--action-pop-inset, 200px) - 14px));
   z-index: 30; -webkit-app-region: no-drag;
   background: rgba(255, 255, 255, 0.985); border: 1px solid rgba(217, 119, 87, 0.45);
   border-radius: 15px; box-shadow: 0 10px 30px rgba(120, 60, 35, 0.38);
-  padding: 11px 13px; display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
   animation: askIn 0.22s ease;
 }
+#stage.edge-left .action-pop { left: 12px; right: auto; }
+#stage.edge-right .action-pop { left: auto; right: 12px; }
 #stage.edge-below .action-pop { top: var(--action-pop-inset, 200px); bottom: auto; }
 .action-pop.hidden { display: none; }
 .ac-top { display: flex; align-items: center; gap: 8px; }
 .ac-title { font-size: 13px; font-weight: 700; color: #3a2a22; flex: 1; }
-.ac-close { cursor: pointer; color: #b06a48; font-size: 14px; padding: 0 4px; border: 0; background: transparent; -webkit-app-region: no-drag; }
-.ac-close:hover { color: #d97757; }
 .ac-scroll { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .ac-sec.hidden { display: none; }
 .ac-sec-h { font-size: 10.5px; color: #c79b86; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
@@ -304,7 +306,8 @@ html, body {
 /* ---------- 气泡 ---------- */
 .bubble {
   position: relative;
-  max-width: 340px;
+  width: max-content;
+  max-width: min(340px, calc(100vw - 24px));
   margin-bottom: 8px;
   padding: 9px 13px;
   background: rgba(255, 255, 255, 0.97);
@@ -344,7 +347,9 @@ html, body {
    并沿用弹层的边缘锚定与动态定高，避免无意间挡住后面的窗口。 */
 .quota-popover {
   position: relative;
-  width: min(292px, calc(100vw - 24px));
+  width: max-content;
+  max-width: min(292px, calc(100vw - 24px));
+  overflow-wrap: anywhere;
   margin-bottom: 10px;
   padding: 11px 12px 10px;
   box-sizing: border-box;
@@ -662,10 +667,10 @@ html, body {
   left: auto !important;
   top: auto !important;
   width: auto;
-  min-width: 72px;
+  min-width: 0;
   height: 34px;
   margin: 0;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
@@ -889,3 +894,17 @@ html, body {
 /* SVG icon (替代 emoji) 的内联样式：1em 大小、跟随文本颜色，垂直对齐文本 */
 .oi { display: inline-flex; align-items: center; justify-content: center; vertical-align: -0.18em; line-height: 1; }
 .oi svg { display: block; }
+
+/* Shared header controls: equal hit areas and restrained warm hover states. */
+.peek-head .popup-icon-button,
+.ac-top .popup-icon-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 28px; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 8px; background: transparent;
+  color: #a06d55; font-size: 16px; cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background .15s ease, color .15s ease;
+}
+.peek-head .popup-icon-button:hover,
+.ac-top .popup-icon-button:hover { background: #fbe9de; color: #79503c; }
+.popup-icon-button:focus-visible { outline: 2px solid #c68b6d; outline-offset: 2px; }

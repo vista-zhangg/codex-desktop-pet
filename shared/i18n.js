@@ -367,6 +367,7 @@
     'peek.unknownProject': '未命名会话',
 
     'menu.panel': '详情',
+    'menu.settings': '设置',
     'menu.privacy': '隐私',
     'menu.collapse': '收起',
 

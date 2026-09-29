@@ -2703,6 +2703,21 @@ actionPop.querySelectorAll('.ac-ops button').forEach((b) => {
   });
 });
 
+function openPetSettings() {
+  if (radialOpen) closeRadial();
+  if (peekOpen) closePeek();
+  if (actionPopOpen) closeActionPop();
+  window.pet.openSettings();
+}
+for (const id of ['peek-settings', 'ac-settings']) {
+  const button = document.getElementById(id);
+  button.innerHTML = window.AgentPawIcons?.icon('settings') || '';
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openPetSettings();
+  });
+}
+
 peekClose.addEventListener('click', (e) => { e.stopPropagation(); closePeek(); });
 peekFocus.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -2784,10 +2799,11 @@ const MENU = [
   // 收起只隐藏桌宠（托盘可重新显示）；应用退出保留在托盘中。
   { ic: 'minus',  labelKey: 'menu.collapse', act: () => window.pet.openHideMenu ? window.pet.openHideMenu() : window.pet.closePet() },
   { labelKey: 'menu.privacy', status: () => privacyModeEnabled() ? 'ON' : 'OFF', act: togglePrivacyMode },
+  { ic: 'settings', labelKey: 'menu.settings', act: openPetSettings },
 ];
-// The compact toolbar reads naturally from state/privacy to detail to hide.
+// The compact toolbar groups privacy, detail and settings before hide.
 // Keep the cat-facing radial menu's original MENU order unchanged.
-const COMPACT_MENU = [MENU[2], MENU[0], MENU[1]];
+const COMPACT_MENU = [MENU[2], MENU[0], MENU[3], MENU[1]];
 
 function usableRadialMetrics(metrics) {
   if (!metrics || !metrics.window || !metrics.workArea) return null;

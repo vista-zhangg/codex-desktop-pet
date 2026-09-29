@@ -29,7 +29,7 @@ const IPC = Object.freeze({
   REMOVE_PET_ASSET: 'remove-pet-asset', RESET_PET_SLOT: 'reset-pet-slot',
   SELECT_PET_CHARACTER: 'pet-character:select', CREATE_PET_CHARACTER: 'pet-character:create',
   IMPORT_PET_CHARACTER: 'pet-character:import', REMOVE_PET_CHARACTER: 'pet-character:remove',
-  CLOSE_SETTINGS: 'close-settings',
+  OPEN_SETTINGS: 'open-settings', CLOSE_SETTINGS: 'close-settings',
   SET_PANEL_HEIGHT: 'set-panel-height', CLOSE_PET: 'close-pet',
   PERMISSION_DECIDE: 'permission-decide', FOCUS_SESSION: 'focus-session', SET_PET_SIZE: 'set-pet-size',
   PET_BLUR: 'pet-blur', PET_POINTER_CHECK: 'pet:pointer-check', SET_IGNORE_MOUSE: 'set-ignore-mouse', QUOTA_ALERT_SHOWN: 'quota-alert:shown',
@@ -62,6 +62,7 @@ contextBridge.exposeInMainWorld('pet', {
   // 渲染进程 -> 主进程
   getStats: () => ipcRenderer.invoke(IPC.GET_STATS),
   openPanel: (agent) => ipcRenderer.send(IPC.OPEN_PANEL, agent || 'all'),
+  openSettings: () => ipcRenderer.send(IPC.OPEN_SETTINGS),
   closePanel: () => ipcRenderer.send(IPC.CLOSE_PANEL),
   getAutoLaunch: () => ipcRenderer.invoke(IPC.GET_AUTO_LAUNCH),
   setAutoLaunch: (enabled) => ipcRenderer.invoke(IPC.SET_AUTO_LAUNCH, !!enabled),

@@ -1507,6 +1507,9 @@ function registerIpc() {
   });
   ipcMain.handle(IPC.REMOVE_PET_ASSET, (e, slotId, assetId) => characterAction(e, () => petAssetStore.removeAsset(slotId, assetId)));
   ipcMain.handle(IPC.RESET_PET_SLOT, (e, slotId) => characterAction(e, () => petAssetStore.resetSlot(slotId)));
+  ipcMain.on(IPC.OPEN_SETTINGS, (e) => {
+    if (senderPetWin(e)) openSettings();
+  });
   ipcMain.on(IPC.CLOSE_SETTINGS, closeSettings);
 
   // 详情面板按内容高度自适应：clamp 到屏幕工作区，阈值防抖避免每次 stats 都抖

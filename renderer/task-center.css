@@ -1,7 +1,7 @@
 /* Task history and session preferences use the existing warm popup material. */
 .ac-scroll { min-height: 0; }
 .ac-tabs { display: flex; gap: 4px; padding: 3px; background: rgba(90,58,42,.055); border-radius: 10px; }
-.ac-tabs button { flex: 1; border: 0; border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 12px; color: #8a6552; background: transparent; cursor: pointer; }
+.ac-tabs button { flex: 1 0 auto; white-space: nowrap; border: 0; border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 12px; color: #8a6552; background: transparent; cursor: pointer; }
 .ac-tabs button[aria-selected="true"] { background: #fff; color: #5a3a2a; box-shadow: 0 1px 4px rgba(90,58,42,.09); font-weight: 650; }
 .ac-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; font-size: 12px; color: #8a6552; }
 .ac-toolbar span { flex: 1; }

@@ -66,7 +66,7 @@ assert.strictEqual((radialSource.match(/window\.pet\.openPanel\(/g) || []).lengt
 assert(/menu\.privacy/.test(radialSource) && /'ON'[\s\S]*'OFF'/.test(radialSource),
   'radial menu must show the compact privacy ON/OFF action');
 assert(!/menu\.quit|window\.pet\.quit/.test(radialSource), 'radial menu must leave whole-app quit in the tray');
-assert(/const COMPACT_MENU = \[MENU\[2\], MENU\[0\], MENU\[1\]\];/.test(js),
+assert(/const COMPACT_MENU = \[MENU\[2\], MENU\[0\], MENU\[3\], MENU\[1\]\];/.test(js),
   'hidden-cat actions must use their dedicated horizontal order');
 assert(/function buildCompactRadial\(\)/.test(js) && /dataset\.layout = 'compact'/.test(js),
   'hidden-cat context menu must build a compact toolbar layout');

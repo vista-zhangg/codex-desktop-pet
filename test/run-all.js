@@ -56,6 +56,7 @@ const TESTS = Object.freeze([
   'opencode-plugin.js',
   'notify-policy.js',
   'task-workflow.js',
+  'task-center-ui.js',
   'workflow-main.js',
 ]);
 

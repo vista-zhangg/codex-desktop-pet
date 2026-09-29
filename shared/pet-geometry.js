@@ -203,7 +203,7 @@
   // Compact L-shaped cluster of buttons in one diagonal quadrant around the
   // pet. Picks the quadrant with the most available room so the buttons sit
   // close to the pet without covering it or spilling off-screen.
-  function cornerMenuLayout({ center, petRect, stackRect = petRect, safeRect, itemRadius = 26, gap = 8, preferred = [] }) {
+  function cornerMenuLayout({ count = 3, center, petRect, stackRect = petRect, safeRect, itemRadius = 26, gap = 8, preferred = [] }) {
     const safe = normalizeRect(safeRect);
     const pet = normalizeRect(petRect);
     const stack = normalizeRect(stackRect);
@@ -228,7 +228,7 @@
       { dir: 'bottom-left',  sx: -1, sy:  1, score: roomBottom * roomLeft },
     ];
 
-    // A stale edge hint must never win over a quadrant where all three
+    // A stale edge hint must never win over a quadrant where all menu
     // buttons fit. Score actual button bounds before applying the preference.
     const prefIndex = new Map(preferred.map((d, i) => [d, preferred.length - i]));
     const edgeBoost = (q) => {
@@ -246,6 +246,12 @@
         { x: outerX, y: outerY },
         { x: outerX, y: cy + q.sy * offset },
       ];
+      if (count === 4) {
+        // Extend the horizontal arm for settings; retain clearance from the pet.
+        const step = itemRadius * 2 + gap;
+        q.points[0].x = outerX - q.sx * step;
+        q.points.push({ x: outerX - q.sx * step * 2, y: outerY });
+      }
       q.overflow = q.points.reduce((total, p) => total
         + Math.max(0, safe.x + itemRadius - p.x)
         + Math.max(0, p.x - (safe.right - itemRadius))

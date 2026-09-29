@@ -103,6 +103,8 @@ const handlers = {
 };
 Object.entries(handlers).forEach(([name,fn]) => ipcMain.handle(name,fn));
 ['set-panel-height','set-pet-size','set-ignore-mouse','quota-alert:shown','pet-blur','pet:hide-menu'].forEach(name=>ipcMain.on(name,noop));
+let settingsOpenRequests = 0;
+ipcMain.on('open-settings', () => { settingsOpenRequests++; });
 const errors=[];
 async function create(page,width,height) {
   const win = new BrowserWindow({width,height,show:false,frame:false,webPreferences:{offscreen:true,preload:path.join(root,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
@@ -277,6 +279,28 @@ app.whenReady().then(async()=>{
     pet.webContents.send('pet:stats',stats);
     await capture(pet,'pet');
     pet.setSize(520,740);
+    for (const [surface, setup, target] of [
+      ['peek', 'openPeek()', '#peek-settings'],
+      ['center', 'openActionPop()', '#ac-settings'],
+      ['radial', "applyStats({...lastStats,chipDisplay:{...lastStats.chipDisplay,showCat:true}}); radialOpen=true; buildRadial(); radial.classList.remove('hidden')", '.radial-item:last-child'],
+      ['compact-menu', "applyStats({...lastStats,chipDisplay:{...lastStats.chipDisplay,showCat:false}}); radialOpen=true; buildRadial(); radial.classList.remove('hidden'); positionCompactRadial()", '.radial-item:nth-child(3)'],
+    ]) {
+      await pet.webContents.executeJavaScript(setup + ';void 0;');
+      await capture(pet, 'settings-entry-' + surface);
+      assert.equal(await pet.webContents.executeJavaScript(`(() => {
+        const buttons = [...document.querySelectorAll('.radial-item, #peek-settings, #peek-close, #ac-settings, #ac-close')].filter(el => el.getClientRects().length && !el.closest('.hidden'));
+        const rects = buttons.map(el => el.getBoundingClientRect());
+        return rects.every(r => r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight)
+          && rects.every((r, i) => rects.slice(i + 1).every(s => r.right <= s.left || s.right <= r.left || r.bottom <= s.top || s.bottom <= r.top));
+      })()`), true, 'settings controls fit without overlapping: ' + surface);
+      const before = settingsOpenRequests;
+      await pet.webContents.executeJavaScript(`document.querySelector('${target}').click();void 0;`);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      assert.equal(settingsOpenRequests, before + 1, 'settings entry dispatches once: ' + surface);
+      assert.equal(await pet.webContents.executeJavaScript('peekOpen || actionPopOpen || radialOpen'), false);
+    }
+    await pet.webContents.executeJavaScript('applyStats({...lastStats,chipDisplay:{...lastStats.chipDisplay,showCat:true}});void 0;');
+    pet.setSize(520,740);
     await pet.webContents.executeJavaScript(`openActionPop(); document.getElementById('ac-tab-recent').click();void 0;`);
     await capture(pet,'pet-recent');
     assert.equal(await pet.webContents.executeJavaScript(`document.querySelectorAll('.ac-history-row').length`),3);
@@ -287,7 +311,7 @@ app.whenReady().then(async()=>{
       const preserved=button.isConnected && document.activeElement===button;
       applyStats(original); return preserved;
     })()`),true,'incoming history preserves the current button and keyboard focus');
-    await pet.webContents.executeJavaScript(`document.getElementById('ac-read-all').click();void 0;`);
+    assert.equal(await pet.webContents.executeJavaScript(`document.getElementById('ac-read-all')`), null, 'manual read control removed');
     await new Promise(resolve => setTimeout(resolve,100));
     assert(stats.recent.every(row => row.read));
     assert.equal(await pet.webContents.executeJavaScript(`(() => {

@@ -11,6 +11,8 @@
   let editingId = '';
   let busy = false;
   let recentSignature = '';
+  const pendingReadIds = new Set();
+  const readError = '已读状态保存失败，重新进入“最近”可重试';
   let recentCards = new Map();
   let sessionSignature = '';
   const status = get('ac-status');
@@ -35,7 +37,7 @@
     if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时前`;
     return `${Math.floor(seconds / 86400)} 天前`;
   }
-  function selectTab(name, focus = false) {
+  function selectTab(name, focus = false, acknowledge = false) {
     if (!tabs.includes(name)) return;
     activeTab = name;
     for (const key of tabs) {
@@ -48,6 +50,28 @@
     get('ac-act-sec').classList.remove('hidden');
     if (focus) get('ac-tab-' + name).focus();
     if (actionPopOpen) fitPopup(actionPop);
+    if (acknowledge && name === 'recent') markViewedRecent();
+  }
+  async function markViewedRecent() {
+    // Acknowledge only the entry snapshot, never records arriving during polling.
+    const ids = (stats?.recent || []).filter(row => !row.read).map(row => row.id);
+    // Let the opening shortcut finish choosing its final tab before acknowledging.
+    await Promise.resolve();
+    if (!actionPopOpen || activeTab !== 'recent') return;
+    const unread = ids.filter(id => !pendingReadIds.has(id));
+    if (!unread.length) return;
+    unread.forEach(id => pendingReadIds.add(id));
+    try {
+      const result = await window.pet.markRecentRead(unread);
+      if (!result?.ok) throw new Error('mark read failed');
+      if (status.textContent === readError) status.textContent = '';
+    } catch {
+      if (actionPopOpen && activeTab === 'recent') {
+        status.textContent = readError;
+      }
+    } finally {
+      unread.forEach(id => pendingReadIds.delete(id));
+    }
   }
   async function run(action) {
     if (busy) return false;
@@ -69,7 +93,6 @@
       return;
     }
     recentSignature = signature;
-    get('ac-read-all').disabled = !rows.some(row => !row.read);
     get('ac-clear-recent').disabled = !rows.length;
     if (!rows.length) {
       list.innerHTML = '';
@@ -105,7 +128,6 @@
         if (ok) closeActionPop();
       }));
       else controls.appendChild(element('span', 'ac-row-note', '会话窗口已不可定位'));
-      if (!row.read) controls.appendChild(button('标为已读', () => run(() => window.pet.markRecentRead([row.id]))));
       card.appendChild(controls);
       next.set(row.id, { signature: rowSignature, card });
     }
@@ -189,14 +211,13 @@
   }
   tabs.forEach((key, index) => {
     const tab = get('ac-tab-' + key);
-    tab.addEventListener('click', () => selectTab(key));
+    tab.addEventListener('click', () => selectTab(key, false, true));
     tab.addEventListener('keydown', event => {
       const offset = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
       if (!offset) return;
-      event.preventDefault(); selectTab(tabs[(index + offset + tabs.length) % tabs.length], true);
+      event.preventDefault(); selectTab(tabs[(index + offset + tabs.length) % tabs.length], true, true);
     });
   });
-  get('ac-read-all').addEventListener('click', () => run(() => window.pet.markRecentRead((stats?.recent || []).map(row => row.id))));
   get('ac-clear-recent').addEventListener('click', () => run(() => window.pet.clearRecent()));
   get('peek-center').addEventListener('click', event => { event.stopPropagation(); openActionPop(); });
   if (window.pet.onWorkflowCommand) window.pet.onWorkflowCommand(command => {
@@ -210,6 +231,6 @@
   window.AgentPawTaskCenter = { render, opened() {
     editingId = ''; status.textContent = ''; render(lastStats);
     const pending = actionableItems().length || lastStats?.waitingCount || lastStats?.needsinputCount;
-    selectTab(pending ? 'actions' : (lastStats?.recent || []).length ? 'recent' : 'sessions');
+    selectTab(pending ? 'actions' : (lastStats?.recent || []).length ? 'recent' : 'sessions', false, true);
   }, closed() { editingId = ''; sessionSignature = ''; } };
 })();
