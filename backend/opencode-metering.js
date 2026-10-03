@@ -25,7 +25,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const { STATE_DIR } = require('./paths');
-const { num, dayKey, mergeLifetime } = require('./metering-common');
+const { num, dayKey, modelHistory, mergeLifetime } = require('./metering-common');
 const { createMeterQueue } = require('./meter-queue');
 
 const USAGE_FILE = path.join(STATE_DIR, 'opencode-usage.jsonl');
@@ -360,6 +360,7 @@ function createOpenCodeMetering(options = {}) {
         key, { ...emptyDay(), ...value },
       ])),
       byModel,
+      byModelByDay: modelHistory(state.byModelByDay),
       diagnostics: {
         ...state.diagnostics,
         records: Object.keys(state.records).length,

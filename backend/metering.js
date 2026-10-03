@@ -21,7 +21,7 @@ const fsp = fs.promises;
 const os = require('os');
 const path = require('path');
 const { STATE_DIR } = require('./paths');
-const { num, dayKey } = require('./metering-common');
+const { num, dayKey, modelHistory } = require('./metering-common');
 const { createMeterQueue } = require('./meter-queue');
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
@@ -480,6 +480,7 @@ function createMetering(options = {}) {
       today,
       lifetime: { ...emptyDay(), ...(state.lifetime || {}) },
       byModel,
+      byModelByDay: modelHistory(state.byModelByDay),
       hourly,
       hourlyTok,
       daily,

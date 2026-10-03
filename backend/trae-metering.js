@@ -26,7 +26,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { STATE_DIR } = require('./paths');
-const { num, dayKey, mergeLifetime } = require('./metering-common');
+const { num, dayKey, modelHistory, mergeLifetime } = require('./metering-common');
 const { createMeterQueue } = require('./meter-queue');
 
 const APPDATA = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
@@ -470,6 +470,7 @@ function createTraeMetering(options = {}) {
         key, { ...emptyDay(), ...value },
       ])),
       byModel,
+      byModelByDay: modelHistory(state.byModelByDay),
       diagnostics: { ...state.diagnostics },
     };
   }

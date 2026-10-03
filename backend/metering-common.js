@@ -12,6 +12,16 @@ function dayKey(timestamp) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+// Return a detached, numeric-only view; callers must not be able to mutate
+// ledger state through a historical model snapshot.
+function modelHistory(history = {}) {
+  return Object.fromEntries(Object.entries(history).map(([day, models]) => [day,
+    Object.fromEntries(Object.entries(models || {}).map(([name, row]) => [name, {
+      tokens: num(row?.tokens), cost: num(row?.cost),
+    }])),
+  ]));
+}
+
 // Provider transcripts use both ISO strings and Unix timestamps.  Date.parse
 // does not accept numeric Unix milliseconds, so normalise the value before it
 // reaches dayKey()/new Date(); otherwise an old record can fall back to the
@@ -82,6 +92,7 @@ function mergeLifetime(previous, current) {
 module.exports = {
   num,
   dayKey,
+  modelHistory,
   parseTimestamp,
   MONOTONIC_USAGE_FIELDS,
   usageHasLoss,

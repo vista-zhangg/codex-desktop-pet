@@ -19,7 +19,7 @@ const os = require('os');
 const path = require('path');
 const { createHash } = require('crypto');
 const { STATE_DIR } = require('./paths');
-const { num, dayKey } = require('./metering-common');
+const { num, dayKey, modelHistory } = require('./metering-common');
 const { createMeterQueue } = require('./meter-queue');
 
 const SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
@@ -608,6 +608,7 @@ function createCodexMetering(options = {}) {
         key, { ...emptyDay(), ...value },
       ])),
       byModel,
+      byModelByDay: modelHistory(state.byModelByDay),
       diagnostics: {
         ...state.diagnostics,
         sessions: Object.keys(state.sessions).length,

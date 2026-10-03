@@ -28,7 +28,7 @@ const fsp = fs.promises;
 const os = require('os');
 const path = require('path');
 const { STATE_DIR } = require('./paths');
-const { num, dayKey, parseTimestamp, mergeLifetime } = require('./metering-common');
+const { num, dayKey, modelHistory, parseTimestamp, mergeLifetime } = require('./metering-common');
 const { createMeterQueue } = require('./meter-queue');
 
 const PROJECTS_DIR = path.join(os.homedir(), '.workbuddy', 'projects');
@@ -422,6 +422,7 @@ function createWorkbuddyMetering(options = {}) {
         key, { ...emptyDay(), ...value },
       ])),
       byModel,
+      byModelByDay: modelHistory(state.byModelByDay),
       diagnostics: { ...state.diagnostics },
     };
   }

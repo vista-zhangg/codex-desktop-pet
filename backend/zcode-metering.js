@@ -24,7 +24,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { STATE_DIR } = require('./paths');
-const { num, dayKey, mergeLifetime } = require('./metering-common');
+const { num, dayKey, modelHistory, mergeLifetime } = require('./metering-common');
 const { createMeterQueue } = require('./meter-queue');
 const zcodeDb = require('./zcode-db');
 
@@ -445,6 +445,7 @@ function createZcodeMetering(options = {}) {
         key, { ...emptyDay(), ...value },
       ])),
       byModel,
+      byModelByDay: modelHistory(state.byModelByDay),
       diagnostics: {
         ...state.diagnostics,
         records: Object.keys(state.records).length,

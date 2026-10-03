@@ -12,111 +12,196 @@
     <div id="card">
       <header id="titlebar">
         <div class="brand">
-          <img class="logo" id="brand-logo" src="../assets/agentpaw-icon.png" alt="" aria-hidden="true" />
+          <img class="logo" src="../assets/agentpaw-icon.png" alt="" />
           <div>
-            <div class="brand-title" id="brand-title">AgentPaw · AI 桌伴</div>
-            <div class="brand-sub" id="active-sub" data-i18n="panel.waitingSession">等待会话…</div>
+            <div class="brand-title">AgentPaw · AI 桌伴</div>
+            <div class="brand-sub" id="active-sub">等待会话…</div>
           </div>
         </div>
-        <div class="header-actions">
-          <span id="agent-badge" class="agent-badge hidden"></span>
-          <button id="close" data-i18n-title="panel.close" title="关闭" aria-label="关闭">✕</button>
-        </div>
+        <button id="close" title="关闭（Esc）" aria-label="关闭">✕</button>
       </header>
-
-      <div class="overview-heading"><h1>工作总览</h1><span>全部工具 · 今日用量</span></div>
-
-      <!-- 今日总览卡片 -->
-      <section id="summary-section" class="grid summary-grid">
-        <div class="stat main-stat">
-          <div class="stat-label" id="main-cost-label">今日 API 等价估算</div>
-          <div class="stat-value" id="today-cost">$0.000</div>
-          <div class="stat-foot" id="today-foot">0 tokens · 0 轮</div>
-          <div class="stat-foot" id="usage-warning" hidden></div>
-        </div>
-      </section>
-
-      <!-- 缓存效率统计卡片 (核心新功能) -->
-      <section id="cache-stats" class="grid cache-grid">
-        <div class="stat">
-          <div class="stat-label" data-i18n="panel.cacheHitRate">缓存命中率</div>
-          <div class="stat-value cache-rate" id="cache-hit-rate">0%</div>
-          <div class="stat-foot" id="cache-input-total">输入总量 0</div>
-        </div>
-        <div class="stat">
-          <div class="stat-label" data-i18n="panel.cacheTokens">缓存读取</div>
-          <div class="stat-value" id="cache-tokens">0</div>
-          <div class="stat-foot" id="cache-detail"></div>
-        </div>
-      </section>
-
-      <!-- Token 明细区块 -->
-      <section class="block" id="token-block">
-        <div class="block-title" id="token-detail-title">Token 明细（今日）</div>
-        <div class="rows" id="token-rows">
-          <div class="row"><span data-i18n="panel.tokIn">输入</span><b id="t-in">0</b></div>
-          <div class="row"><span data-i18n="panel.tokOut">输出</span><b id="t-out">0</b></div>
-          <div class="row cache-read-row"><span data-i18n="panel.tokCacheRead">缓存读取</span><b id="t-cr">0</b></div>
-          <div class="row total"><span data-i18n="panel.msgRounds">消息轮次</span><b id="t-msg">0</b></div>
-        </div>
-      </section>
-
-      <!-- 用量趋势 -->
-      <section class="block">
-        <div class="block-title">
-          <span data-i18n="panel.usageTrend">用量趋势</span>
-          <span class="trend-controls">
-            <span class="range-tabs">
-              <button data-range="today" class="range active" aria-pressed="true" data-i18n="panel.rangeToday">今日</button>
-              <button data-range="7d" class="range" aria-pressed="false" data-i18n="panel.range7d">7天</button>
-              <button data-range="30d" class="range" aria-pressed="false" data-i18n="panel.range30d">30天</button>
-            </span>
-            <span class="metric-tabs">
-              <button data-metric="tokens" class="mt active" aria-pressed="true" data-i18n="panel.metricTokens">Token</button>
-              <button data-metric="cost" class="mt" aria-pressed="false" data-i18n="panel.metricCost">费用</button>
-            </span>
-          </span>
-        </div>
-        <div id="view-hours" class="uview">
-          <div id="chart" class="chart"></div>
-          <div id="chart-axis" class="chart-axis" aria-hidden="true"></div>
-          <div id="hours-readout" class="readout"></div>
-        </div>
-        <div id="price-src" class="price-src"></div>
-      </section>
-
-      <div class="cols">
-        <!-- 按模型统计 -->
-        <section class="block">
-          <div class="block-title" data-i18n="panel.byModel">按模型（分）</div>
-          <div id="by-model" class="rows"><div class="empty" data-i18n="panel.noData">暂无数据</div></div>
-        </section>
-
-        <!-- 活跃任务 -->
-        <section class="block">
-          <div class="block-title" data-i18n="panel.activeTasks">进行中的任务</div>
-          <div id="sess-list" class="rows"><div class="empty" data-i18n="panel.noActiveSession">暂无活跃会话</div></div>
-        </section>
-
-        <!-- 累计统计 -->
-        <section class="block" id="lifetime-block">
-          <div class="block-title" data-i18n="panel.lifetimeStats">累计统计</div>
-          <div class="rows" id="lifetime-rows">
-            <div class="row"><span data-i18n="panel.lifetimeCost">累计费用</span><b id="lt-cost">$0.00</b></div>
-            <div class="row"><span data-i18n="panel.lifetimeTokens">累计 Tokens</span><b id="lt-tokens">0</b></div>
-            <div class="row"><span data-i18n="panel.lifetimeMsgs">累计轮次</span><b id="lt-msgs">0</b></div>
-          </div>
-          <p class="lifetime-note" data-i18n="panel.lifetimeNote">本机已记录的全部历史，不随时间筛选切换。费用为 API 等价估算。</p>
-        </section>
-
-        <!-- 实时操作 -->
-        <section class="block">
-          <div class="block-title" data-i18n="panel.liveOps">实时操作</div>
-          <ul id="ops" class="ops"><li class="empty" data-i18n="panel.waitingOps">等待操作…</li></ul>
-        </section>
+      <div class="overview-heading">
+        <h1>用量详情</h1>
+        <label class="source-label">工具 <select id="usage-source" aria-label="筛选工具">
+            <option value="all">全部工具</option>
+          </select>
+        </label>
       </div>
+      <section class="block" id="activity-block">
+        <div class="block-title">
+          <span>Token 活动</span>
+          <div class="tabs" aria-label="活动视图">
+            <button type="button" data-view="daily" aria-pressed="true">每天</button>
+            <button type="button" data-view="weekly" aria-pressed="false">每周</button>
+            <button type="button" data-view="cumulative" aria-pressed="false">窗口累计</button>
+          </div>
+        </div>
+        <div class="scope-note" id="activity-scope">
+        </div>
+        <div id="chart" aria-label="最近 90 天 Token 活动">
+        </div>
+        <div class="heat-legend" id="activity-legend">
+        </div>
+        <div class="readout" id="hours-readout" aria-live="polite">
+        </div>
+        <div class="activity-actions">
+          <button id="activity-prev" type="button" aria-label="上一个时段">←</button>
+          <button id="activity-next" type="button" aria-label="下一个时段">→</button>
+          <button id="activity-drill" type="button">查看当日明细 ↓</button>
+        </div>
+      </section>
+      <section class="details-section" aria-label="所选周期用量">
+        <div class="details-heading">
+          <h2>用量明细</h2>
+          <div class="tabs range-tabs" aria-label="统计周期">
+            <button type="button" data-range="today" aria-pressed="true">今日</button>
+            <button type="button" data-range="7d" aria-pressed="false">近 7 天</button>
+            <button type="button" data-range="30d" aria-pressed="false">近 30 天</button>
+          </div>
+        </div>
+        <div class="period-line">
+          <span id="usage-period" class="scope-note">
+          </span>
+          <button type="button" id="clear-day" hidden>返回周期统计</button>
+        </div>
+        <p id="usage-warning" class="scope-note" hidden>
+        </p>
+        <div id="summary-section" class="grid summary-grid">
+          <div class="stat">
+            <div class="stat-label">已记录 Token</div>
+            <div class="stat-value" id="period-tokens">—</div>
+            <div class="stat-foot" id="token-change">
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">参考金额 · USD · 非账单</div>
+            <div class="stat-value" id="today-cost">—</div>
+            <div class="stat-foot" id="cost-change">
+            </div>
+          </div>
+        </div>
+        <details class="block pricing-block">
+          <summary>
+            <span id="pricing-coverage">计价覆盖待确认</span>
+            <span>金额说明</span>
+          </summary>
+          <p class="scope-note">金额沿用本机台账，可能混合来源上报、匹配价格和近似估算，不代表订阅账单。旧台账未保存完整的逐笔计价状态，因此无法准确计算覆盖率；零金额用量不视为免费。</p>
+          <div id="price-src" class="price-src">
+          </div>
+        </details>
+        <section class="block" id="token-block">
+          <div class="block-title">
+            <span>缓存与 Token</span>
+            <span id="token-detail-title" class="scope-note">
+            </span>
+          </div>
+          <div id="cache-stats" class="cache-grid">
+            <div>
+              <div class="stat-label">缓存率 · 读取占输入</div>
+              <div class="stat-value" id="cache-hit-rate">—</div>
+              <div class="stat-foot" id="cache-change">
+              </div>
+            </div>
+            <div>
+              <div class="stat-label">缓存读取</div>
+              <div class="stat-value" id="cache-tokens">—</div>
+              <div class="stat-foot">Token</div>
+            </div>
+            <div>
+              <div class="stat-label">缓存写入</div>
+              <div class="stat-value" id="cache-write">—</div>
+              <div class="stat-foot">Token</div>
+            </div>
+          </div>
+          <div class="rows" id="token-rows">
+          </div>
+          <details class="inline-details" id="cache-write-breakdown" hidden>
+            <summary>缓存写入明细</summary>
+            <div id="cache-write-rows">
+            </div>
+          </details>
+          <details class="inline-details">
+            <summary>统计口径</summary>
+            <p class="scope-note">缓存率 = 缓存读取 ÷ 全部输入，按 Token 加权，并非请求命中率。输入已包含缓存读取与写入；推理为输出子集，不重复加总。计量记录按各工具原有规则汇总，部分后台请求仅计 Token、不计条数；不等同于用户消息或统一的对话轮次。缺少明细时不推算缓存率。缩写数值经四舍五入，悬停数值可查看精确值。</p>
+          </details>
+        </section>
+        <section class="block" id="distribution-block">
+          <div class="block-title">
+            <span>消耗分布</span>
+            <div class="tabs" aria-label="分组方式">
+              <button type="button" data-group="source" aria-pressed="true">按工具</button>
+              <button type="button" data-group="model" aria-pressed="false">按模型</button>
+            </div>
+          </div>
+          <div class="distribution-controls">
+            <span class="scope-note" id="distribution-scope">
+            </span>
+            <div class="tabs" aria-label="排行指标">
+              <button type="button" data-metric="tokens" aria-pressed="true">Token</button>
+              <button type="button" data-metric="cost" aria-pressed="false">金额</button>
+            </div>
+          </div>
+          <table class="distribution-table">
+            <thead>
+              <tr>
+                <th id="distribution-name">工具 / 占比</th>
+                <th>Token</th>
+                <th>金额 · USD</th>
+              </tr>
+            </thead>
+            <tbody id="by-model">
+            </tbody>
+          </table>
+          <button type="button" id="show-all-models" hidden>展开全部</button>
+        </section>
+      </section>
+      <section class="block" id="sessions-block">
+        <div class="block-title">
+          <span>当前任务</span>
+          <span class="scope-note">实时 · 不随日期筛选</span>
+        </div>
+        <div id="sess-list" class="rows">
+        </div>
+      </section>
+      <details class="block" id="ops-block">
+        <summary>
+          <span>最近操作</span>
+          <span class="scope-note">实时 · 不随日期筛选</span>
+        </summary>
+        <ul id="ops" class="ops">
+        </ul>
+      </details>
+      <section class="block" id="lifetime-block">
+        <div class="block-title">
+          <span>历史累计</span>
+          <span class="scope-note">不随日期筛选</span>
+        </div>
+        <div class="lifetime-grid">
+          <div>
+            <span class="stat-label">累计 Token</span>
+            <b id="lt-tokens">—</b>
+          </div>
+          <div>
+            <span class="stat-label">累计参考金额 · USD</span>
+            <b id="lt-cost">—</b>
+          </div>
+          <div>
+            <span class="stat-label">累计计量记录</span>
+            <b id="lt-msgs">—</b>
+          </div>
+        </div>
+        <p class="scope-note" id="lifetime-note">本机已记录的历史累计，可能超出活动图的保留窗口。</p>
+      </section>
+      <footer id="updated-at" class="scope-note">
+      </footer>
     </div>
-    <script src="../shared/i18n.js"></script>
-    <script src="panel.js"></script>
+    <script src="../shared/i18n.js">
+    </script>
+    <script src="../shared/usage-analytics.js">
+    </script>
+    <script src="panel-usage.js">
+    </script>
+    <script src="panel.js">
+    </script>
   </body>
 </html>

@@ -52,7 +52,7 @@ function normalizeSourceRow(source, row = {}) {
   // Older persisted Claude ledgers exposed only cacheCreate. Preserve that
   // history when the split 5m/1h fields are absent.
   const cacheCreate = cacheWrite5m + cacheWrite1h || num(row.cacheCreate);
-  const inputTotal = Number.isFinite(Number(row.inputTotal))
+  const inputTotal = row.inputTotal !== null && row.inputTotal !== undefined && Number.isFinite(Number(row.inputTotal))
     ? num(row.inputTotal)
     : input + (isSeparateCache ? cacheRead + cacheCreate : 0);
   const tokens = num(row.tokens) || inputTotal + output;

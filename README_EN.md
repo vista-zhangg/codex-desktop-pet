@@ -11,14 +11,14 @@
   </p>
   <p>
     <a href="https://github.com/vista-zhangg/codex-desktop-pet/releases/latest"><strong>Download for Windows</strong></a> ·
-    <a href="docs/releases/1.9.6.md">1.9.6 release notes</a> ·
+    <a href="docs/releases/1.9.7.md">1.9.7 release notes</a> ·
     <a href="docs/介绍.md">User guide (中文)</a>
   </p>
 
   <p>
     <a href="https://github.com/vista-zhangg/codex-desktop-pet/actions/workflows/ci.yml"><img src="https://github.com/vista-zhangg/codex-desktop-pet/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/platform-Windows%20x64-0078D4?logo=windows" alt="Windows x64 only">
-    <img src="https://img.shields.io/badge/version-1.9.6-F6A04A" alt="Version 1.9.6">
+    <img src="https://img.shields.io/badge/version-1.9.7-F6A04A" alt="Version 1.9.7">
     <a href="LICENSE"><img src="https://img.shields.io/badge/code%20license-MIT-2EA44F" alt="MIT License"></a>
   </p>
 </div>
@@ -41,7 +41,7 @@ Keep Codex progress, 5h / 7d subscription quota, and token usage on your desktop
 - **Native permission cards** — allow, deny, or permanently allow supported Claude Code requests from the pet.
 - **Calmer task notifications** — choose Standard or Needs attention only, combine completion notices, defer transient failures, and mute an agent or project while keeping permission cards available.
 - **Recent events and session preferences** — review recent activity in the action center, label or follow sessions, return to a task, and optionally set global shortcuts. Shortcuts are disabled by default.
-- **Unified usage view** — tokens, cache reads and writes, context windows, models, daily trends, and API-price estimates.
+- **Unified usage view** — tokens, cache ratios and reads/writes, context windows, models, and reference costs, with tool/date filters, a 90-day activity heatmap, and lifetime totals.
 - **Check Codex quota without opening Codex** — startup automatically discovers the native Codex Desktop CLI. The tray uses the independent AgentPaw brand icon; right-click the AgentPaw tray icon to see the masked current account, 5h / 7d remaining quota, reset times, and the last update. Missing windows stay `--`, with no manual setup required.
 - **Integration health and repair** — verify all six agents, then repair or remove AgentPaw-managed integrations from Settings.
 - **One-click privacy mode** — right-click the companion to toggle the compact ON/OFF control, or use Settings, while keeping essential state and usage visible.

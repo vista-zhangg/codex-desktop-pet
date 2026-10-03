@@ -1,225 +1,24 @@
 'use strict';
-
-const $ = (id) => document.getElementById(id);
-let lastOpKey = null;
+const $ = id => document.getElementById(id);
 const t = (key, vars) => window.AgentPawI18n.t(key, vars);
-const backgroundStatus = (session) => window.AgentPawI18n.backgroundStatus(session);
-
-let hoursSummary = '';
-let usageMetric = 'tokens';
-let usageRange = 'today';
-
-const THEME = {
-  name: 'AgentPaw · AI 桌伴',
-  color: '#0071e3',
-  barGradient: 'linear-gradient(180deg, #91bdf1, #568fde)',
-  nowGradient: 'linear-gradient(180deg, #4c9af0, #0071e3)',
-};
-
-function fmt(n) {
-  n = n || 0;
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
-  return String(Math.round(n));
-}
-function timeStr(ts) {
-  const d = new Date(ts);
-  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-}
-function shortModel(m) {
-  if (!m) return '?';
-  const s = String(m);
-  if (s.startsWith('gpt') || s.startsWith('o1') || s.startsWith('o3') || s.startsWith('chatgpt')) {
-    return s.replace(/^gpt-/, 'GPT-').replace(/^o(\d)/, 'O$1').replace(/^chatgpt-/, 'ChatGPT-');
-  }
-  return s.replace(/^claude-/, '').replace(/\[1m\]/, '·1M');
-}
-
-function contextLabel(value) {
-  if (value === null || value === undefined || !Number.isFinite(Number(value))) return '';
-  return `上下文 ${Math.max(0, Math.min(100, Number(value))).toFixed(0)}%`;
-}
-
+const backgroundStatus = session => window.AgentPawI18n.backgroundStatus(session);
+let lastOpKey = null;
 let lastStats = null;
-
-function applyAgentTheme() {
-  // The stylesheet owns the surface; only populate brand and static copy here.
-  $('brand-title').textContent = THEME.name;
-  const badge = $('agent-badge');
-  if (badge) badge.classList.add('hidden');
-  $('main-cost-label').textContent = '今日 API 等价估算（全部工具）';
-  $('token-detail-title').textContent = 'Token 明细（今日）';
-}
-
-// 合并口径下：cacheRead 已是各工具缓存读取之和（含 Codex/WorkBuddy/TRAE 的
-// cachedInput，主进程合并时已折算），cacheWrite5m/1h 为缓存写入之和。
-// 总输入用主进程算好的 inputTotal（Claude/opencode 的缓存是独立字段，
-// Codex/WorkBuddy/TRAE 的 input 已含缓存子集，直接在面板相加会混口径）。
-function calcCacheStats(today) {
-  const cacheReadTokens = Math.max(0, Number(today.cacheRead) || Number(today.cachedInput) || 0);
-  const cacheWrite5m = Math.max(0, Number(today.cacheWrite5m) || Number(today.cacheWrite) || 0);
-  const cacheWrite1h = Math.max(0, Number(today.cacheWrite1h) || 0);
-  const cacheWriteTokens = cacheWrite5m + cacheWrite1h;
-  const hasInputTotal = today.inputTotal !== undefined && today.inputTotal !== null
-    && Number.isFinite(Number(today.inputTotal));
-  const totalInputTokens = hasInputTotal
-    ? Math.max(0, Number(today.inputTotal))
-    : Math.max(0, Number(today.input) || 0) + cacheWriteTokens + cacheReadTokens;
-
-  // 缓存命中率 = 缓存读取 / 总输入
-  const hitRate = totalInputTokens > 0
-    ? Math.min(100, (cacheReadTokens / totalInputTokens) * 100)
-    : 0;
-
-  return {
-    hitRate,
-    cacheReadTokens,
-    cacheWrite5m,
-    cacheWrite1h,
-    cacheWriteTokens,
-    totalInputTokens,
-  };
-}
-
-function rangeDays() {
-  return usageRange === '30d' ? 30 : usageRange === '7d' ? 7 : 1;
-}
-
-function localDayKey(date) {
-  const d = date instanceof Date ? date : new Date(date);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function localDateOffset(offset) {
-  const d = new Date();
-  // Noon avoids a DST boundary moving the date into the neighbouring bucket.
-  d.setHours(12, 0, 0, 0);
-  d.setDate(d.getDate() - offset);
-  return d;
-}
-
-function periodLabel() {
-  if (usageRange === '7d') return '近 7 天';
-  if (usageRange === '30d') return '近 30 天';
-  return '今日';
-}
-
-function rangeUsage(s) {
-  if (usageRange === 'today') return { ...(s.today || {}) };
-  const out = {
-    input: 0, output: 0, inputTotal: 0, tokens: 0, cost: 0, messages: 0, msgs: 0,
-    cacheRead: 0, cachedInput: 0, cacheWrite5m: 0, cacheWrite1h: 0,
-    cacheWrite: 0, cacheCreate: 0, reasoningOutput: 0,
-  };
-  const todayKey = localDayKey(new Date());
-  const daily = s.daily || {};
-  for (let offset = rangeDays() - 1; offset >= 0; offset--) {
-    const key = localDayKey(localDateOffset(offset));
-    // Prefer the live today aggregate because it includes the latest scan.
-    const row = key === todayKey ? (s.today || {}) : (daily[key] || {});
-    const cacheRead = Number(row.cacheRead) || Number(row.cachedInput) || 0;
-    const cacheWrite5m = Number(row.cacheWrite5m) || Number(row.cacheWrite) || 0;
-    const cacheWrite1h = Number(row.cacheWrite1h) || 0;
-    const hasInputTotal = row.inputTotal !== undefined && row.inputTotal !== null
-      && Number.isFinite(Number(row.inputTotal));
-    const inputTotal = hasInputTotal
-      ? Number(row.inputTotal)
-      : (Number(row.input) || 0) + cacheRead + cacheWrite5m + cacheWrite1h;
-    const values = {
-      input: Number(row.input) || 0,
-      output: Number(row.output) || 0,
-      inputTotal: Math.max(0, inputTotal),
-      tokens: Number(row.tokens) || 0,
-      cost: Number(row.cost) || 0,
-      messages: Number(row.messages) || Number(row.msgs) || 0,
-      cacheRead: Math.max(0, cacheRead),
-      cachedInput: Number(row.cachedInput) || 0,
-      cacheWrite5m: Math.max(0, cacheWrite5m),
-      cacheWrite1h: Math.max(0, cacheWrite1h),
-      cacheWrite: Math.max(0, cacheWrite5m),
-      cacheCreate: Math.max(0, cacheWrite5m + cacheWrite1h),
-      reasoningOutput: Number(row.reasoningOutput) || 0,
-    };
-    values.msgs = values.messages;
-    for (const keyName of Object.keys(values)) out[keyName] = (out[keyName] || 0) + values[keyName];
-  }
-  out.messages = out.msgs;
-  return out;
-}
-
-function renderRangeDetails(s) {
-  const usage = rangeUsage(s);
-  const cacheStats = calcCacheStats(usage);
-  const todayMsgs = usage.msgs || usage.messages || 0;
-  const label = periodLabel();
-
-  const hitRateEl = $('cache-hit-rate');
-  hitRateEl.textContent = cacheStats.hitRate.toFixed(1) + '%';
-  if (cacheStats.hitRate >= 50) hitRateEl.style.color = '#24865b';
-  else hitRateEl.style.color = '#242529';
-
-  $('cache-input-total').textContent = `${t('panel.cacheInputTotal')} ${fmt(cacheStats.totalInputTokens)}`;
-  $('cache-tokens').textContent = fmt(cacheStats.cacheReadTokens);
-  $('cache-detail').textContent = `写入 ${fmt(cacheStats.cacheWriteTokens)} · 占输入 ${cacheStats.hitRate.toFixed(1)}%`;
-  $('token-detail-title').textContent = `Token 明细（${label}）`;
-
-  const tokenRows = $('token-rows');
-  tokenRows.innerHTML = `
-    <div class="row"><span>${t('panel.cacheInputTotal')} Tokens</span><b id="t-in">${fmt(cacheStats.totalInputTokens)}</b></div>
-    <div class="row"><span>${t('panel.tokOut')} Tokens</span><b id="t-out">${fmt(usage.output || 0)}</b></div>
-    ${cacheStats.cacheWrite5m ? `<div class="row"><span>${t('panel.tokCacheWrite5m')}</span><b>${fmt(cacheStats.cacheWrite5m)}</b></div>` : ''}
-    ${cacheStats.cacheWrite1h ? `<div class="row"><span>${t('panel.tokCacheWrite1h')}</span><b>${fmt(cacheStats.cacheWrite1h)}</b></div>` : ''}
-    ${usage.reasoningOutput ? `<div class="row"><span>推理 Tokens</span><b>${fmt(usage.reasoningOutput)}</b></div>` : ''}
-    <div class="row cache-read-row"><span>${t('panel.tokCacheRead')}</span><b id="t-cr">${fmt(cacheStats.cacheReadTokens)}</b></div>
-    <div class="row total"><span>${t('panel.msgRounds')}</span><b id="t-msg">${todayMsgs}</b></div>
-  `;
-}
-
+function fmt(n) { n = Number(n) || 0; return n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : Math.round(n).toLocaleString('zh-CN'); }
+function timeStr(ts) { return new Date(ts).toLocaleTimeString('zh-CN', { hour12: false }); }
+function contextLabel(value) { return value == null || !Number.isFinite(Number(value)) ? '' : `上下文 ${Math.max(0, Math.min(100, Number(value))).toFixed(0)}%`; }
 function render(s) {
   if (!s) return;
   lastStats = s;
-
-  // 头部信息
-  if (s.active && s.active.project) {
-    const context = contextLabel(s.context && s.context.percent);
-    $('active-sub').textContent = `${s.active.project} · ${shortModel(s.active.model)}${context ? ' · ' + context : ''}`;
-  } else {
-    $('active-sub').textContent = t('panel.waitingSession');
-  }
-
-  // 今日总览
-  $('today-cost').textContent = '$' + (s.today.cost || 0).toFixed(3);
-  const todayTokens = s.today.tokens || 0;
-  const todayMsgs = s.today.msgs || s.today.messages || 0;
-  $('today-foot').textContent = `${fmt(todayTokens)} tokens · ${todayMsgs} 轮`;
-  const usageWarning = $('usage-warning');
-  usageWarning.textContent = (s.usageWarnings || []).join(' ');
-  usageWarning.hidden = !usageWarning.textContent;
-
-  // Cache and token details follow the selected trend range. The top summary
-  // remains explicitly “today” so the panel never mixes periods silently.
-  renderRangeDetails(s);
-
-  // 累计统计
-  const lt = s.lifetime || {};
-  $('lt-cost').textContent = '$' + (lt.cost || 0).toFixed(2);
-  $('lt-tokens').textContent = fmt(lt.tokens || 0);
-  $('lt-msgs').textContent = lt.msgs || lt.messages || 0;
-
-  // 按模型统计
-  renderByModel(s.byModel || {});
-
-  // 用量趋势图
-  renderChart(s);
-
-  // 会话列表
-  renderSessList(s.sessions || []);
-
-  // 操作流
-  renderOps(s.lastOps || []);
-
-  // 首次渲染时自适应高度一次，之后不再自动调整
+  $('active-sub').textContent = s.active?.project ? `${s.active.project}${s.active.model ? ' · ' + s.active.model : ''}` : t('panel.waitingSession');
+  renderUsage(s);
+  renderLive(s);
   if (!hasAutoFitted) fitOnce();
+}
+function renderLive(s) {
+  const accepts = row => usageState.source === 'all' || row.agent === usageState.source;
+  renderSessList((s.sessions || []).filter(accepts));
+  renderOps((s.lastOps || []).filter(accepts));
 }
 
 function renderOps(ops) {
@@ -235,7 +34,7 @@ function renderOps(ops) {
     .slice(0, 30)
     .map(
       (o, i) =>
-        `<li class="${i === 0 && isNew ? 'new' : ''}"><span>${o.icon || '🔧'}</span><span>${escapeHtml(o.detail)}</span><span class="op-proj">${escapeHtml(o.project || '')}</span><span class="op-time">${timeStr(o.ts)}</span></li>`
+        `<li class="${i === 0 && isNew ? 'new' : ''}"><span>${escapeHtml(o.icon || '🔧')}</span><span>${escapeHtml(o.detail)}</span><span class="op-proj">${escapeHtml(o.project || '')}</span><span class="op-time">${timeStr(o.ts)}</span></li>`
     )
     .join('');
 }
@@ -261,43 +60,6 @@ function fitOnce() {
       window.pet.setPanelHeight(finalH);
     }
   });
-}
-
-function fitPanelHeight() { fitOnce(); }
-
-function renderByModel(byModel) {
-  const bm = $('by-model');
-  const entries = Object.entries(byModel).sort((a, b) =>
-    ((b[1].cost || 0) - (a[1].cost || 0)) || ((b[1].tokens || 0) - (a[1].tokens || 0))
-  );
-  if (!entries.length) { bm.innerHTML = '<div class="empty">' + escapeHtml(t('panel.noData')) + '</div>'; return; }
-  const totCost = entries.reduce((s, [, v]) => s + (v.cost || 0), 0);
-  const totTok = entries.reduce((s, [, v]) => s + (v.tokens || 0), 0);
-  // Some providers intentionally report zero cost when no matching price is
-  // available. Keep the model comparison useful by falling back to tokens.
-  const useCostShare = totCost > 0;
-  const base = useCostShare ? totCost : (totTok || 1);
-  let html = '';
-  for (const [model, v] of entries) {
-    const share = useCostShare ? (v.cost || 0) : (v.tokens || 0);
-    const pct = Math.round((share / base) * 100);
-    const cacheRead = v.cacheRead || v.cachedInput || 0;
-    const hasDetail = (v.input || v.output || cacheRead || v.cacheWrite5m || v.cacheWrite1h || v.reasoningOutput);
-    let detail = '';
-    if (hasDetail) {
-      detail = `<div class="m-detail">入 ${fmt(v.inputTotal || v.input)} · 出 ${fmt(v.output)} · 缓读 ${fmt(cacheRead)}${v.cacheWrite5m ? ` · 写 ${fmt(v.cacheWrite5m)}` : ''}${v.reasoningOutput ? ` · 推理 ${fmt(v.reasoningOutput)}` : ''}${v.msgs ? ` · ${v.msgs}轮` : ''}</div>`;
-    }
-    html += `<div class="m-item">`
-      + `<div class="m-head"><span class="mc">${escapeHtml(shortModel(model))}</span>`
-      + `<span class="m-bar"><i style="width:${pct}%;background:${THEME.color}"></i></span>`
-      + `<b class="m-cost">$${(v.cost || 0).toFixed(3)}</b>`
-      + `<span class="m-tok">${fmt(v.tokens)} · ${pct}%</span></div>`
-      + detail + `</div>`;
-  }
-  html += `<div class="m-item m-total"><div class="m-head"><span class="mc">合计</span>`
-    + `<span class="m-bar"></span><b class="m-cost">$${totCost.toFixed(3)}</b>`
-    + `<span class="m-tok">${fmt(totTok)}</span></div></div>`;
-  bm.innerHTML = html;
 }
 
 const STATE_META = {
@@ -370,73 +132,10 @@ function renderSessList(sessions) {
     .join('');
 }
 
-function buildChartPoints(s) {
-  if (usageRange === 'today') {
-    const values = usageMetric === 'cost' ? (s.hourly || []) : (s.hourlyTok || []);
-    const hours = values.length === 24 ? values : new Array(24).fill(0);
-    return hours.map((value, hour) => ({
-      value: Number(value) || 0,
-      label: `${hour}:00`,
-      axis: [0, 6, 12, 18, 23].includes(hour) ? `${hour}${t('panel.hourUnit')}` : '',
-      isNow: hour === new Date().getHours(),
-    }));
-  }
-
-  const daily = s.daily || {};
-  const todayKey = localDayKey(new Date());
-  const points = [];
-  for (let offset = rangeDays() - 1; offset >= 0; offset--) {
-    const date = localDateOffset(offset);
-    const key = localDayKey(date);
-    const row = key === todayKey ? (s.today || {}) : (daily[key] || {});
-    const value = usageMetric === 'cost' ? Number(row.cost) || 0 : Number(row.tokens) || 0;
-    const label = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    const tick = rangeDays() === 7
-      ? [0, 2, 4, 6].includes(points.length)
-      : [0, 6, 12, 18, 24, 29].includes(points.length);
-    points.push({ value, label, axis: tick ? label : '', isNow: key === todayKey });
-  }
-  return points;
-}
-
-function renderChart(s) {
-  const el = $('chart');
-  const axis = $('chart-axis');
-  if (!el || !axis) return;
-  const points = buildChartPoints(s);
-  const max = Math.max(0.000001, ...points.map((point) => point.value));
-  let total = 0;
-  let peakIndex = -1;
-  let peakValue = 0;
-  const count = points.length || 1;
-  el.style.setProperty('--bar-count', count);
-  axis.style.setProperty('--bar-count', count);
-  el.innerHTML = points.map((point, index) => {
-    const value = point.value;
-    total += value;
-    if (value > peakValue) { peakValue = value; peakIndex = index; }
-    const pct = Math.max(4, Math.round((value / max) * 100));
-    const cls = value <= 0 ? 'bar empty' : point.isNow ? 'bar now' : 'bar';
-    const display = usageMetric === 'cost' ? '$' + value.toFixed(3) : fmt(value) + ' tokens';
-    const barBg = point.isNow ? THEME.nowGradient : THEME.barGradient;
-    return `<div class="${cls}" data-label="${escapeHtml(point.label)}" data-v="${escapeHtml(display)}" style="height:${pct}%;background:${value <= 0 ? '' : barBg}" title="${escapeHtml(point.label)} · ${escapeHtml(display)}"></div>`;
-  }).join('');
-  axis.innerHTML = points.map((point) => `<span>${escapeHtml(point.axis)}</span>`).join('');
-
-  const peak = peakIndex >= 0 ? points[peakIndex] : null;
-  const range = periodLabel();
-  hoursSummary = usageMetric === 'cost'
-    ? `${range}总计 $${total.toFixed(3)} · 峰值 ${peak ? `${peak.label} $${peakValue.toFixed(3)}` : '—'}`
-    : `${range}总计 ${fmt(total)} tokens · 峰值 ${peak ? `${peak.label} ${fmt(peakValue)}` : '—'}`;
-  const ro = $('hours-readout');
-  if (ro) ro.innerHTML = hoursSummary;
-}
-
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
-// 事件监听
 window.pet.onPanelStats(render);
 window.pet.onPrice((m) => {
   const el = $('price-src');
@@ -461,7 +160,7 @@ window.pet.onPrice((m) => {
   } else {
     el.textContent = `价目表: 内置价格（${scope}）${syncText}`;
   }
-  const pricingHint = m.estimate ? '部分数据源在未匹配到精确价格时会采用估算；WorkBuddy 未匹配模型不计费。' : '所有数据源均使用精确价格或用户覆盖。';
+  const pricingHint = '此处为当前价目表状态，不代表历史用量的计价覆盖率。未匹配价格的用量不代表免费。';
   el.title = sync.phase === 'error' && sync.error
     ? `${pricingHint} 最近一次同步失败：${sync.error}`
     : pricingHint;
@@ -483,58 +182,11 @@ document.addEventListener('keydown', (e) => {
   window.pet.closePanel();
 });
 
-function animateChartChange() {
-  const chart = $('view-hours');
-  if (typeof chart.animate !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  chart.getAnimations().forEach((animation) => animation.cancel());
-  chart.animate([{ opacity: .3, transform: 'translateY(4px)' }, { opacity: 1, transform: 'translateY(0)' }],
-    { duration: 300, easing: 'cubic-bezier(.22, 1, .36, 1)' });
-}
-
-document.querySelectorAll('.metric-tabs .mt').forEach((b) =>
-  b.addEventListener('click', () => {
-    usageMetric = b.dataset.metric === 'cost' ? 'cost' : 'tokens';
-    document.querySelectorAll('.metric-tabs .mt').forEach((x) => {
-      x.classList.toggle('active', x === b);
-      x.setAttribute('aria-pressed', String(x === b));
-    });
-    if (lastStats) {
-      renderChart(lastStats);
-      animateChartChange();
-      setTimeout(fitPanelHeight, 50);
-    }
-  })
-);
-
-document.querySelectorAll('.range-tabs .range').forEach((b) =>
-  b.addEventListener('click', () => {
-    usageRange = ['today', '7d', '30d'].includes(b.dataset.range) ? b.dataset.range : 'today';
-    document.querySelectorAll('.range-tabs .range').forEach((x) => {
-      x.classList.toggle('active', x === b);
-      x.setAttribute('aria-pressed', String(x === b));
-    });
-    if (lastStats) {
-      renderRangeDetails(lastStats);
-      renderChart(lastStats);
-      animateChartChange();
-      setTimeout(fitPanelHeight, 50);
-    }
-  })
-);
-
-// 悬停查看具体数值
-$('chart').addEventListener('mouseover', (e) => {
-  const bar = e.target.closest('.bar');
-  if (bar) $('hours-readout').innerHTML = `${escapeHtml(bar.dataset.label)} · <b>${escapeHtml(bar.dataset.v)}</b>`;
-});
-$('chart').addEventListener('mouseleave', () => { $('hours-readout').innerHTML = hoursSummary; });
-
-// 初始化
+// Initialize after both renderers load.
 (async () => {
   applyStaticI18n();
-  applyAgentTheme();
+  initUsageControls();
   const s = await window.pet.getStats();
   if (s) render(s);
-  // 首次数据渲染后，延迟一次确保内容完全渲染，再做自适应高度
   setTimeout(fitOnce, 300);
 })();

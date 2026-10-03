@@ -48,6 +48,7 @@ const stats = { today, sessions, active: sessions[0], lifetime: { cost: 136.72, 
   codexQuota: { status:'ready', updatedAt:Date.now(), windows:{ fiveHour:{ remainingPercent:76, usedPercent:24, resetsAt:Math.floor(Date.now()/1000)+6200 }, weekly:{ remainingPercent:92,usedPercent:8,resetsAt:Math.floor(Date.now()/1000)+320000 } } }
 };
 const noop = () => {};
+stats.usage = require('./panel-preview-data.cjs')().usage;
 function refreshWorkflow() {
   Object.assign(stats, taskCenter.sync({ ...stats, sessions }, workflow.notifications));
   if (petPreview && !petPreview.isDestroyed()) petPreview.webContents.send('pet:stats', stats);
@@ -252,7 +253,7 @@ app.whenReady().then(async()=>{
     const lifetimeText = await panel.webContents.executeJavaScript(`document.getElementById('lt-cost').textContent`);
     for(const range of ['7d','30d','today']) {
       await panel.webContents.executeJavaScript(`document.querySelector('[data-range="${range}"]').click()`);
-      assert.equal(await panel.webContents.executeJavaScript(`document.querySelectorAll('#chart .bar').length`),range==='7d'?7:range==='30d'?30:24);
+      assert.equal(await panel.webContents.executeJavaScript(`document.querySelectorAll('#chart [data-day]').length`),90,'activity window stays independent of the detail range');
       assert.equal(await panel.webContents.executeJavaScript(`document.getElementById('lt-cost').textContent`),lifetimeText,'range filter never changes lifetime');
     }
     panel.setSize(420,700);

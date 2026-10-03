@@ -53,6 +53,7 @@ const { createTraeMetering } = require('./backend/trae-metering');
 const { createOpenCodeMetering } = require('./backend/opencode-metering');
 const { createZcodeMetering } = require('./backend/zcode-metering');
 const { emptyUsage, normalizeSourceRow, mergeUsageRows, mergeDaily } = require('./backend/usage-stats');
+const { buildPanelUsage } = require('./backend/panel-stats');
 const { buildIntegrationHealth } = require('./backend/integration-health');
 const { withValues: withSourceValues } = require('./backend/source-registry');
 const transport = require('./backend/transport');
@@ -881,7 +882,7 @@ function buildStats(agent = 'all', snapshot = null, cachedMeter = null) {
   const ops = recentOps.slice(0, 30);
   const stats = adapter.buildPetStats(snap, pending, meter, {
     lastOps: ops,
-    codexUsage,
+    codexUsage: codexUsage ? { ...codexUsage, byModelByDay: undefined } : null,
     usageProvider: 'all',
   });
   stats.chipDisplay = getChipDisplay();
@@ -929,7 +930,13 @@ function emitStats() {
   lastStats = buildStats('all', snapshot, cachedMeter);
   if (taskNotifications) taskNotifications.reconcile(lastStats.sessions);
   for (const st of petStates()) sendWin(st.win, IPC.PET_STATS, lastStats);
-  sendPanel(IPC.PANEL_STATS, lastStats);
+  // Historical model matrices belong to the details window. Keep them off
+  // the pet's frequent stats channel and skip their projection when closed.
+  if (panelWin && !panelWin.isDestroyed()) sendPanel(IPC.PANEL_STATS, panelStats(lastStats, cachedMeter));
+}
+
+function panelStats(stats, meters = meterStats()) {
+  return { ...stats, usage: buildPanelUsage(Object.entries(meters)) };
 }
 
 function scheduleEmit() {
@@ -1278,7 +1285,10 @@ function registerIpc() {
     return petWin && !petWin.isDestroyed() ? petWin : null;
   };
 
-  ipcMain.handle(IPC.GET_STATS, () => lastStats || buildStats());
+  ipcMain.handle(IPC.GET_STATS, (event) => {
+    const stats = lastStats || buildStats();
+    return panelWin && event.sender === panelWin.webContents ? panelStats(stats) : stats;
+  });
   const companionSender = (e) => !!stateOfSender(e.sender)
     || !!(settingsWin && !settingsWin.isDestroyed() && e.sender === settingsWin.webContents);
   ipcMain.handle(IPC.GET_COMPANION_STATE, (e) => companionSender(e) ? companionState() : null);

@@ -20,6 +20,7 @@ const TESTS = Object.freeze([
   'zcode-metering.js',
   'zcode-integration.js',
   'usage-stats.js',
+  'usage-analytics.js',
   'source-registry.js',
   'integration-health.js',
   'privacy-mode.js',
