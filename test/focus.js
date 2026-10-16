@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { codexThreadUrl, focusSession } = require('../backend/focus');
+const { codexThreadUrl, focusSession, selectDesktopPid } = require('../backend/focus');
 const adapter = require('../backend/adapter');
 
 async function run() {
@@ -43,6 +43,42 @@ async function run() {
   assert.strictEqual(terminalResult, false);
   assert.deepStrictEqual(terminalPids, [10, 20], 'non-Codex sessions should keep the existing PID focus path');
 
+  const processes = [
+    { pid: 10, parentPid: 20, name: 'opencode', window: false },
+    { pid: 20, parentPid: 1, name: 'OpenChamber', window: true },
+    { pid: 30, parentPid: 1, name: 'OpenChamber', window: true },
+    { pid: 40, parentPid: 50, name: 'ZCode', window: false },
+    { pid: 50, parentPid: 1, name: 'ZCode', window: true },
+  ];
+  assert.strictEqual(selectDesktopPid('opencode', [10], processes), 20, 'use the OpenChamber ancestor of the opencode service');
+  assert.strictEqual(selectDesktopPid('opencode', [], processes), null, 'ambiguous desktop windows must not be chosen arbitrarily');
+  assert.strictEqual(selectDesktopPid('zcode', [40], processes), 50, 'ZCode worker resolves to its UI ancestor');
+  assert.strictEqual(selectDesktopPid('zcode', [], processes), 50, 'history-only session can use a unique existing ZCode window');
+  assert.strictEqual(selectDesktopPid('opencode', [], processes.filter(p => p.pid !== 20 && p.pid !== 30)), null);
+  assert.strictEqual(selectDesktopPid('opencode', [50], processes), null, 'unrelated window is never an OpenChamber target');
+  assert.strictEqual(selectDesktopPid('opencode', [99999], processes), null, 'stale PID cannot disambiguate multiple windows');
+  assert.strictEqual(selectDesktopPid('opencode', [], [{ pid: 30, name: 'OpenChamber', window: false }]), null,
+    'window discovery excludes another user or desktop session');
+  assert.strictEqual(selectDesktopPid('opencode', [10], [
+    { pid: 10, parentPid: 11, name: 'opencode', window: false },
+    { pid: 11, parentPid: 10, name: 'node', window: false },
+  ]), null, 'cyclic parent chain terminates without a target');
+  let desktopAgent;
+  assert.strictEqual(await focusSession({ agentId: 'zcode' }, {
+    activateDesktop: async (agent, pids) => { desktopAgent = agent; assert.deepStrictEqual(pids, []); return 50; },
+    activatePids: async () => { throw new Error('desktop success must skip generic PID fallback'); },
+  }), true);
+  assert.strictEqual(desktopAgent, 'zcode');
+  assert.strictEqual(await focusSession({ agentId: 'opencode', sourcePid: 10 }, {
+    activateDesktop: async () => { throw new Error('query failed'); },
+    activatePids: async () => false,
+  }), false, 'desktop query failure must degrade gracefully');
+  let cliPids;
+  assert.strictEqual(await focusSession({ agentId: 'opencode', sourcePid: 10, pidChain: [20] }, {
+    activateDesktop: async () => false,
+    activatePids: async pids => { cliPids = pids; return 20; },
+  }), true, 'standalone OpenCode keeps terminal PID focus when no desktop is found');
+  assert.deepStrictEqual(cliPids, [10, 20]);
   assert.strictEqual(await focusSession(null, { activatePids: async () => true }), false);
 
   const stats = adapter.buildPetStats({
@@ -53,6 +89,7 @@ async function run() {
       { id: 'trae-1', agentId: 'trae', state: 'working', pidChain: [200], updatedAt: Date.now() },
       { id: 'workbuddy-1', agentId: 'workbuddy', state: 'working', sourcePid: 300, updatedAt: Date.now() },
       { id: 'opencode-1', agentId: 'opencode', state: 'working', updatedAt: Date.now() },
+      { id: 'zcode-1', agentId: 'zcode', state: 'working', updatedAt: Date.now() },
     ],
   }, [], null, {});
   const focusable = Object.fromEntries(stats.sessions.map((s) => [s.agent, s.focusable]));
@@ -61,8 +98,9 @@ async function run() {
     claude: true,
     trae: true,
     workbuddy: true,
-    opencode: false,
-  }, 'the renderer should only advertise session focus when a deep link or live PID exists');
+    opencode: true,
+    zcode: true,
+  }, 'desktop-backed sessions can attempt existing-window discovery');
 
   console.log('Session focus checks passed');
 }

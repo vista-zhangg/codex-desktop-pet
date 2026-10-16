@@ -47,6 +47,7 @@ const TOOL_NAMES = {
   plan: 'Plan',
   agent: 'Agent',
   task: 'Agent',
+  subagent: 'Agent',
 };
 
 function num(v) {
@@ -130,6 +131,112 @@ function toolName(tool) {
   return TOOL_NAMES[t] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Tool');
 }
 
+function v2Payload(event) {
+  if (!event || typeof event !== 'object') return {};
+  const data = event.data && typeof event.data === 'object' ? event.data : null;
+  const properties = event.properties && typeof event.properties === 'object' ? event.properties : null;
+  return data || properties || {};
+}
+
+function v2SessionId(payload) {
+  return str(payload.sessionID) || str(payload.form && payload.form.sessionID);
+}
+
+function v2ParentId(payload) {
+  return str(payload.parentID);
+}
+
+function v2ToolInput(input) {
+  if (!input || typeof input !== 'object') return input;
+  return {
+    ...input,
+    sessionID: input.sessionID || input.sessionId,
+    tool: input.tool || input.name,
+  };
+}
+
+function v2TextPart(payload, sid, messageID, text, mode) {
+  return {
+    event: {
+      type: 'message.part.updated',
+      properties: {
+        sessionID: sid,
+        part: {
+          id: messageID,
+          messageID,
+          sessionID: sid,
+          role: 'assistant',
+          text,
+          mode,
+        },
+      },
+    },
+  };
+}
+
+function v2ToLegacyEvent(event, textState) {
+  const type = str(event && event.type);
+  const payload = v2Payload(event);
+  const sid = v2SessionId(payload);
+  if (!sid) return null;
+  if (type === 'session.created' || type === 'session.updated') {
+    const parentID = v2ParentId(payload);
+    const info = {
+      id: sid,
+      sessionID: sid,
+      ...(parentID ? { parentID } : {}),
+      directory: str(payload.location && payload.location.directory),
+      title: str(payload.title),
+    };
+    return {
+      event: {
+        type,
+        properties: { info },
+      },
+    };
+  }
+  if (type === 'session.deleted') {
+    return { event: { type, properties: { sessionID: sid, info: { id: sid } } } };
+  }
+  if (type === 'session.compaction.started' || type === 'session.compacting') {
+    return { event: { type: 'session.compacted', properties: { sessionID: sid } } };
+  }
+  if (type === 'session.execution.started') {
+    return { event: { type: 'session.status', properties: { sessionID: sid, status: { type: 'busy' } } } };
+  }
+  if (type === 'session.execution.failed') {
+    return { event: { type: 'session.error', properties: { sessionID: sid, error: payload.error || payload } } };
+  }
+  if (type === 'session.execution.succeeded') {
+    return { event: { type: 'session.idle', properties: { sessionID: sid } } };
+  }
+  if (type === 'session.execution.interrupted') {
+    return { event: { type: 'session.aborted', properties: { sessionID: sid } } };
+  }
+  if (type === 'permission.asked' || type === 'permission.updated' || type === 'permission.replied') {
+    return { event: { type, properties: payload } };
+  }
+  if (type === 'form.created' || type === 'form.replied' || type === 'form.cancelled') {
+    const formType = type === 'form.created' ? 'question.asked' : type === 'form.replied' ? 'question.replied' : 'question.rejected';
+    return { event: { type: formType, properties: { ...payload, sessionID: sid, id: str(payload.id) || str(payload.form && payload.form.id) } } };
+  }
+  if (type === 'session.next.text.started' || type === 'session.next.text.delta' || type === 'session.next.text.ended') {
+    let current = textState.get(sid);
+    if (type === 'session.next.text.started' || !current) {
+      const sequence = (current && current.sequence || 0) + 1;
+      current = { sequence, id: str(payload.messageID) || `${sid}:text:${sequence}`, text: '' };
+    }
+    if (type === 'session.next.text.delta') current.text += str(payload.delta);
+    if (type === 'session.next.text.ended' && typeof payload.text === 'string') current.text = payload.text;
+    current.text = current.text.slice(-LAST_OUTPUT_MAX * 4);
+    textState.delete(sid);
+    textState.set(sid, current);
+    while (textState.size > 512) textState.delete(textState.keys().next().value);
+    return v2TextPart(payload, sid, current.id, current.text, 'snapshot');
+  }
+  return null;
+}
+
 export const AgentPawOpenCodePlugin = async ({ directory }) => {
   const sessions = new Map();        // sessionID -> { cwd, title, model }
   const lastTurnAt = new Map();      // sessionID -> 最近一次回合活动 ms
@@ -138,6 +245,7 @@ export const AgentPawOpenCodePlugin = async ({ directory }) => {
   const outputTail = new Map();      // sessionID -> assistant 文本尾部
   const textParts = new Map();       // sessionID -> latest full text per part
   const turnStates = new Map();      // active / waiting / error / complete
+  const pendingWaits = new Map();    // sessionID -> pending permission/form ids
   const loggedMessages = new Set();  // 已写 usage 的 message id
   const seenMessageIds = new Set();  // 见过的 message id（opencode 会话重载会重放
                                      // 既有消息的 message.updated，重放不算新回合）
@@ -161,6 +269,7 @@ export const AgentPawOpenCodePlugin = async ({ directory }) => {
     outputTail.delete(sid);
     textParts.delete(sid);
     turnStates.delete(sid);
+    pendingWaits.delete(sid);
   }
 
   function touchSession(sid) {
@@ -168,6 +277,7 @@ export const AgentPawOpenCodePlugin = async ({ directory }) => {
     const meta = sessions.get(sid) || { cwd: str(directory) };
     meta.touchedAt = Date.now();
     sessions.set(sid, meta);
+    while (sessions.size > 512) dropSession(sessions.keys().next().value);
   }
 
   function pruneSessions(now = Date.now()) {
@@ -183,7 +293,7 @@ export const AgentPawOpenCodePlugin = async ({ directory }) => {
       if (!sessionID) return;
       touchSession(sessionID);
       const meta = sessions.get(sessionID) || {};
-      const body = { state, event, session_id: sessionID, agent_id: AGENT_ID };
+      const body = { state, event, session_id: sessionID, agent_id: AGENT_ID, source_pid: process.pid };
       if (extra.cwd || meta.cwd) body.cwd = extra.cwd || meta.cwd;
       if (extra.model || meta.model) body.model = extra.model || meta.model;
       if (extra.session_title || meta.title) body.session_title = extra.session_title || meta.title;
@@ -247,14 +357,30 @@ export const AgentPawOpenCodePlugin = async ({ directory }) => {
         if (!sid) return;
         const prev = sessions.get(sid) || {};
         const meta = {
-          cwd: str(info.directory) || prev.cwd || '',
+          cwd: str(info.directory) || prev.cwd || str(directory),
           title: str(info.title) || prev.title || '',
           model: prev.model || '',
+          parentID: str(info.parentID) || prev.parentID || '',
           touchedAt: Date.now(),
         };
         sessions.set(sid, meta);
-        if (type === 'session.created') {
+        touchSession(sid);
+        if (type === 'session.created' && !meta.parentID) {
           post('idle', 'SessionStart', { session_id: sid });
+        }
+        return;
+      }
+
+      if (type === 'session.status') {
+        const sid = str(p.sessionID) || str(info.id) || '';
+        if (sid && p.status && p.status.type === 'busy') {
+          if (turnStates.get(sid) !== 'active' && turnStates.get(sid) !== 'waiting') {
+            outputTail.delete(sid);
+            textParts.delete(sid);
+            post('thinking', 'UserPromptSubmit', { session_id: sid });
+          }
+          if (!pendingWaits.get(sid)?.size) turnStates.set(sid, 'active');
+          lastRoleBySession.set(sid, 'assistant');
         }
         return;
       }
@@ -287,6 +413,7 @@ export const AgentPawOpenCodePlugin = async ({ directory }) => {
             if (meta) meta.model = model;
           }
           lastTurnAt.set(sid, Date.now());
+          if (info.tokens && !info.finish) logUsage(sid, info);
           if (info.error && typeof info.error === 'object') {
             turnStates.set(sid, 'error');
             post('error', 'StopFailure', { session_id: sid, api_error_type: str(info.error.type || info.error.message) || 'error' });
@@ -311,12 +438,13 @@ export const AgentPawOpenCodePlugin = async ({ directory }) => {
       if (type === 'message.part.updated') {
         // TextPart 全文流式到达：只缓存尾部，不 POST（避免刷屏）。
         const part = (p.part && typeof p.part === 'object') ? p.part : p;
-        const text = str(part.text || (part.part && part.part.text));
-        if (!text) return;
+        const text = typeof part.text === 'string' ? part.text : str(part.part && part.part.text);
+        if (!text && part.mode !== 'snapshot') return;
         const sid = str(part.sessionID) || str(p.sessionID) || '';
         if (!sid) return;
         touchSession(sid);
         // 会话开头（尚无 message.updated）的文本默认属于用户 prompt。
+        if (part.role === 'assistant') lastRoleBySession.set(sid, 'assistant');
         if (lastRoleBySession.get(sid) !== 'assistant') {
           userText.set(sid, ((userText.get(sid) || '') + text).slice(-LAST_OUTPUT_MAX * 4));
         } else {
@@ -331,6 +459,16 @@ export const AgentPawOpenCodePlugin = async ({ directory }) => {
           if (outputTail.get(sid).length > LAST_OUTPUT_MAX * 4) {
             outputTail.set(sid, outputTail.get(sid).slice(-LAST_OUTPUT_MAX * 4));
           }
+        }
+        return;
+      }
+
+      if (type === 'session.aborted') {
+        const sid = str(p.sessionID);
+        if (sid) {
+          turnStates.set(sid, 'aborted');
+          pendingWaits.delete(sid);
+          post('idle', 'TurnAborted', { session_id: sid });
         }
         return;
       }
@@ -366,6 +504,13 @@ export const AgentPawOpenCodePlugin = async ({ directory }) => {
       if (type === 'permission.asked' || type === 'permission.updated' || type === 'question.asked') {
         const sid = str(p.sessionID) || str(info.sessionID) || '';
         if (sid) {
+          touchSession(sid);
+          const waits = pendingWaits.get(sid) || new Set();
+          const kind = type === 'question.asked' ? 'form' : 'permission';
+          const id = str(p.id) || str(p.permission && p.permission.id) || kind;
+          waits.add(`${kind}:${id}`);
+          while (waits.size > 128) waits.delete(waits.values().next().value);
+          pendingWaits.set(sid, waits);
           turnStates.set(sid, 'waiting');
           post('notification', 'Notification', { session_id: sid });
         }
@@ -375,6 +520,14 @@ export const AgentPawOpenCodePlugin = async ({ directory }) => {
       if (type === 'permission.replied' || type === 'question.replied' || type === 'question.rejected') {
         const sid = str(p.sessionID) || str(info.sessionID) || '';
         if (sid) {
+          const waits = pendingWaits.get(sid);
+          const kind = type === 'permission.replied' ? 'permission' : 'form';
+          const id = str(p.requestID) || str(p.id) || kind;
+          if (waits) {
+            waits.delete(`${kind}:${id}`);
+            if (waits.size) return;
+            pendingWaits.delete(sid);
+          }
           turnStates.set(sid, 'active');
           post('thinking', 'ElicitationResult', { session_id: sid });
         }
@@ -388,7 +541,13 @@ export const AgentPawOpenCodePlugin = async ({ directory }) => {
         const sid = str(input && (input.sessionID || input.session_id));
         if (!sid) return;
         const name = toolName(input && input.tool);
-        turnStates.set(sid, 'active');
+        if (after && input.status === 'error') {
+          turnStates.set(sid, 'error');
+          post('error', 'PostToolUseFailure', { session_id: sid, tool_name: name,
+            api_error_type: str(input.error && input.error.message) || str(input.error) || 'tool error' });
+          return;
+        }
+        if (!pendingWaits.get(sid)?.size) turnStates.set(sid, 'active');
         post(!after && name === 'Agent' ? 'juggling' : 'working', after ? 'PostToolUse' : 'PreToolUse', { session_id: sid, tool_name: name });
       } catch {}
     };
@@ -398,12 +557,177 @@ export const AgentPawOpenCodePlugin = async ({ directory }) => {
     event: onEvent,
     'tool.execute.before': onToolExec(false),
     'tool.execute.after': onToolExec(true),
+    usage: logUsage,
     dispose: () => {
       sessions.clear(); lastTurnAt.clear(); lastRoleBySession.clear();
       userText.clear(); outputTail.clear(); loggedMessages.clear();
       seenMessageIds.clear(); stoppedMessageIds.clear();
       turnStates.clear();
+      pendingWaits.clear();
       textParts.clear();
     },
   };
+};
+
+export default {
+  id: 'agentpaw-opencode',
+  setup: async (ctx) => {
+    const hooks = await AgentPawOpenCodePlugin({
+      directory: str(ctx && ctx.location && ctx.location.directory) || process.cwd(),
+    });
+    const registrations = [];
+    const textState = new Map();
+    const sessionDirectories = new Map();
+    const pendingUsage = new Set();
+    const meteredIds = new Set();
+    const deletedSessions = new Set();
+    const ownDirectory = path.resolve(str(ctx && ctx.location && ctx.location.directory) || process.cwd());
+    let stopped = false;
+    let eventIterator;
+    let metering = false;
+    const cancellations = new Set();
+
+    function bounded(call, timeout = 500, cancellable = true) {
+      return new Promise((resolve) => {
+        let timer;
+        const finish = (value) => {
+          clearTimeout(timer);
+          cancellations.delete(abort);
+          resolve(value);
+        };
+        const abort = () => finish();
+        if (cancellable) cancellations.add(abort);
+        if (timeout) timer = setTimeout(abort, timeout);
+        Promise.resolve().then(call).then(finish, abort);
+      });
+    }
+
+    const register = async (call) => {
+      try {
+        const registration = await call();
+        if (registration && typeof registration.dispose === 'function') registrations.push(registration);
+      } catch {}
+    };
+
+    function owns(sid, location) {
+      if (!sid || sid === 'global') return false;
+      const directory = str(location && location.directory);
+      if (directory) {
+        sessionDirectories.delete(sid);
+        sessionDirectories.set(sid, path.resolve(directory));
+        while (sessionDirectories.size > 512) sessionDirectories.delete(sessionDirectories.keys().next().value);
+      }
+      return sessionDirectories.get(sid) === ownDirectory;
+    }
+
+    function requestUsage(sid) {
+      if (stopped || typeof ctx?.session?.messages !== 'function') return;
+      pendingUsage.add(sid);
+      while (pendingUsage.size > 64) pendingUsage.delete(pendingUsage.values().next().value);
+      if (metering) return;
+      metering = true;
+      (async () => {
+        try {
+          while (!stopped && pendingUsage.size) {
+            const sessionID = pendingUsage.values().next().value;
+            pendingUsage.delete(sessionID);
+            let cursor;
+            const cursors = new Set();
+            for (let pageNumber = 0; pageNumber < 8 && !stopped; pageNumber++) {
+              const page = await bounded(() => ctx.session.messages({ sessionID, limit: 100,
+                ...(cursor ? { cursor } : { order: 'desc' }) }));
+              if (stopped || deletedSessions.has(sessionID) || !Array.isArray(page && page.data)) break;
+              let known = false;
+              for (const msg of page.data.slice(0, 100)) {
+                if (msg?.type !== 'assistant' || !str(msg.id) || !num(msg.time?.completed)) continue;
+                if (meteredIds.has(msg.id)) { known = true; continue; }
+                const model = msg.model;
+                const tokens = msg.tokens;
+                if (!str(model?.id) || !str(model?.providerID) || !tokens ||
+                    ![tokens.input, tokens.output, tokens.reasoning, tokens.cache?.read, tokens.cache?.write]
+                      .every((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0)) continue;
+                hooks.usage(sessionID, { ...msg, modelID: model.id, providerID: model.providerID });
+                meteredIds.add(msg.id);
+                while (meteredIds.size > 20000) meteredIds.delete(meteredIds.values().next().value);
+              }
+              const next = str(page.cursor && page.cursor.next);
+              if (known || !next || cursors.has(next)) break;
+              cursors.add(next);
+              cursor = next;
+            }
+          }
+        } catch {} finally { metering = false; }
+      })();
+    }
+
+    if (ctx && ctx.tool && typeof ctx.tool.hook === 'function') {
+      await register(() => ctx.tool.hook('execute.before', async (input) => {
+        if (!stopped && owns(str(input && input.sessionID), ctx.location)) await hooks['tool.execute.before'](v2ToolInput(input));
+      }));
+      await register(() => ctx.tool.hook('execute.after', async (input) => {
+        if (!stopped && owns(str(input && input.sessionID), ctx.location)) await hooks['tool.execute.after'](v2ToolInput(input));
+      }));
+    }
+
+    if (ctx && ctx.session && typeof ctx.session.hook === 'function') {
+      await register(() => ctx.session.hook('prompt', async (input) => {
+        if (stopped) return;
+        const sid = str(input && input.sessionID);
+        if (!owns(sid, ctx.location)) return;
+        textState.delete(sid);
+        const text = str(input && input.prompt && input.prompt.text);
+        await hooks.event({ event: { type: 'message.updated', properties: { info: {
+          id: str(input.messageID), sessionID: sid, role: 'user', title: text,
+        } } } });
+      }));
+    }
+
+    if (ctx && ctx.event && typeof ctx.event.subscribe === 'function') {
+      try {
+        const iterable = ctx.event.subscribe();
+        eventIterator = iterable[Symbol.asyncIterator]();
+        (async () => {
+          try {
+            while (!stopped) {
+              const next = await bounded(() => eventIterator.next(), 0);
+              if (stopped || !next || next.done) break;
+              const event = next.value;
+              const payload = v2Payload(event);
+              const sid = v2SessionId(payload);
+              if (!owns(sid, event.location || payload.location)) continue;
+              if (event.type === 'session.deleted') {
+                textState.delete(sid);
+                sessionDirectories.delete(sid);
+                pendingUsage.delete(sid);
+                deletedSessions.add(sid);
+                while (deletedSessions.size > 512) deletedSessions.delete(deletedSessions.values().next().value);
+              } else if (event.type === 'session.created' || event.type === 'session.execution.started') {
+                deletedSessions.delete(sid);
+                if (event.type === 'session.execution.started') textState.delete(sid);
+              }
+              if (event.type === 'session.step.ended' || event.type === 'session.execution.succeeded' ||
+                  event.type === 'session.execution.failed' || event.type === 'session.execution.interrupted') requestUsage(sid);
+              const legacy = v2ToLegacyEvent(event, textState);
+              if (legacy) await hooks.event(legacy);
+            }
+          } catch {}
+        })();
+      } catch {}
+    }
+
+    return async () => {
+      if (stopped) return;
+      stopped = true;
+      for (const abort of [...cancellations]) abort();
+      const closing = [];
+      if (eventIterator && typeof eventIterator.return === 'function') {
+        closing.push(bounded(() => eventIterator.return(), 500, false));
+      }
+      for (const registration of registrations.splice(0)) closing.push(bounded(() => registration.dispose(), 500, false));
+      textState.clear(); sessionDirectories.clear(); pendingUsage.clear();
+      meteredIds.clear(); deletedSessions.clear();
+      hooks.dispose();
+      await Promise.all(closing);
+    };
+  },
 };

@@ -51,6 +51,12 @@ async function main() {
   const meter = createOpenCodeMetering({ usageFile, stateDir });
   await meter.scan();
   let stats = meter.getStats();
+  const lightStats = meter.getStats({ includeModelHistory: false, includeDaily: false });
+  assert.deepStrictEqual(lightStats.byModelByDay, {}, 'light snapshot skips historical model projection');
+  assert.deepStrictEqual(lightStats.today, stats.today, 'light snapshot preserves today totals');
+  assert.deepStrictEqual(lightStats.lifetime, stats.lifetime, 'light snapshot preserves lifetime totals');
+  assert.deepStrictEqual(lightStats.daily, {}, 'light snapshot skips daily history projection');
+  assert.deepStrictEqual(lightStats.byModel, stats.byModel, 'light snapshot preserves today model totals');
   assert.strictEqual(stats.today.tokens, 1900);
   assert.strictEqual(stats.today.input, 1100);
   assert.strictEqual(stats.today.output, 550);

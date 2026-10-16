@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const { createStubWorld } = require('./dom-stub');
+const { t } = require('../shared/i18n');
 
 const world = createStubWorld();
 const { sandbox, window, elements } = world;
@@ -12,13 +13,15 @@ const requests = [];
 let command;
 let fail = false;
 let complete;
+let closeRadialCalls = 0;
 const snapshot = (recent, waitingCount = 0) => ({ recent, sessions: [], waitingCount });
 const row = id => ({ id, at: Date.now(), kind: 'done', project: id, focusable: true, read: false });
 Object.assign(sandbox, {
   actionPopOpen: false, actionPop: elements('action-pop'), lastStats: snapshot([row('a')]),
   actionableItems: () => [], fitPopup() {}, peekAgentLabel: () => 'Codex',
   PEEK_BUSY_STATES: new Set(), radialOpen: false, askActive: false,
-  openActionPop() { sandbox.actionPopOpen = true; window.AgentPawTaskCenter.opened(); },
+  closeRadial() { closeRadialCalls++; sandbox.radialOpen = false; },
+  openActionPop(initialTab) { sandbox.actionPopOpen = true; window.AgentPawTaskCenter.opened(initialTab); },
   closeActionPop() { sandbox.actionPopOpen = false; window.AgentPawTaskCenter.closed(); },
 });
 window.pet.onWorkflowCommand = handler => { command = handler; };
@@ -47,8 +50,12 @@ const click = name => elements('ac-tab-' + name).dispatch('click');
   center.render(sandbox.lastStats);
   await flush();
   assert.equal(requests.length, 0, 'hidden rendering never reads history');
-  sandbox.openActionPop();
-  click('recent');
+  assert.equal(t('sess.more', { count: 3 }), '另有 3 个会话，打开会话列表');
+  sandbox.openActionPop('sessions');
+  await flush();
+  assert.equal(elements('ac-tab-sessions').getAttribute('aria-selected'), 'true', 'opening sessions selects sessions without reading recent');
+  assert.equal(requests.length, 0, 'opening sessions does not acknowledge recent history');
+  click('recent'); click('recent');
   await flush();
   assert.deepEqual(requests, [['a']], 'opening recent acknowledges once even with a repeated click');
   sandbox.lastStats = snapshot([row('b'), row('a')]);
@@ -97,5 +104,43 @@ const click = name => elements('ac-tab-' + name).dispatch('click');
   complete(); await flush();
   elements('ac-clear-recent').dispatch('click'); await flush();
   assert.equal(cleared, 1, 'clear remains available');
-  console.log('Task center automatic read, navigation, failure and action isolation checks passed');
+
+  sandbox.lastStats = snapshot([row('overflow')], 2);
+  sandbox.radialOpen = true;
+  const requestCount = requests.length;
+  center.openSessions();
+  assert.equal(sandbox.actionPopOpen, true, 'overflow opens the action center synchronously');
+  assert.equal(sandbox.radialOpen, false, 'overflow closes the radial menu');
+  assert.equal(closeRadialCalls, 1);
+  assert.equal(elements('ac-tab-sessions').getAttribute('aria-selected'), 'true');
+  await flush();
+  assert.equal(requests.length, requestCount, 'overflow does not read history or resolve pending work');
+  assert.equal(sandbox.lastStats.waitingCount, 2);
+  assert.equal(sandbox.lastStats.recent[0].read, false);
+  click('recent');
+  center.openSessions();
+  await flush();
+  assert.equal(elements('ac-tab-sessions').getAttribute('aria-selected'), 'true', 'overflow switches an already open center to sessions');
+  assert.equal(requests.length, requestCount, 'sessions selection cancels a queued recent acknowledgement');
+  sandbox.closeActionPop();
+  sandbox.lastStats = snapshot([row('default')]);
+  sandbox.radialOpen = true;
+  const open = sandbox.openActionPop;
+  sandbox.openActionPop = initialTab => {
+    assert.equal(elements('ac-tab-sessions').getAttribute('aria-selected'), 'true', 'sessions is selected before opening the popup');
+    assert.equal(sandbox.radialOpen, false, 'radial closes before the action center opens');
+    assert.equal(initialTab, 'sessions', 'overflow passes sessions as the preferred opening tab');
+    open(initialTab);
+  };
+  center.openSessions();
+  sandbox.openActionPop = open;
+  await flush();
+  assert.equal(requests.length, requestCount, 'overflow overrides the default recent tab');
+  sandbox.closeActionPop();
+  sandbox.openActionPop('unexpected');
+  await flush();
+  assert.equal(elements('ac-tab-recent').getAttribute('aria-selected'), 'true', 'unsupported preferred tabs retain default selection');
+  assert.equal(requests.length, requestCount + 1);
+  complete(); await flush();
+  console.log('Task center automatic read, sessions overflow, navigation, failure and action isolation checks passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

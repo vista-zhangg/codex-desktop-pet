@@ -341,10 +341,8 @@ function buildPetStats(snapshot, pendingPermissions, metering, opts) {
         ? toolLabel(e.lastEventTool || '')
         : null,
       sessionId: e.id,
-      // Codex has an exact thread deep link. Hook-backed tools are focusable
-      // when pidwalk found their live terminal/IDE window; watcher/history-only
-      // sessions intentionally do not advertise an action that must fail.
-      focusable: e.agentId === 'codex'
+      // Desktop-backed sessions can discover an existing UI window at click time.
+      focusable: e.agentId === 'codex' || e.agentId === 'zcode' || e.agentId === 'opencode'
         || (Number.isInteger(e.sourcePid) && e.sourcePid > 0)
         || (Array.isArray(e.pidChain) && e.pidChain.some((p) => Number.isInteger(p) && p > 0)),
       headless: e.headless,

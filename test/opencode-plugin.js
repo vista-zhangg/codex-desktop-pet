@@ -26,6 +26,254 @@ async function until(fn, timeoutMs = 3000) {
 
 const PLUGIN_SRC = path.join(__dirname, '..', 'hook', 'opencode-plugin.js');
 
+async function testV2(plugin, home, token) {
+  const runtime = path.join(home, '.agentpaw', 'runtime.json');
+  const originalRuntime = fs.readFileSync(runtime);
+  const usageFile = path.join(home, '.agentpaw', 'opencode-usage.jsonl');
+  const got = [];
+  const failures = [];
+  const cleanups = [];
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      got.push(JSON.parse(body));
+      res.end('{}');
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const writeRuntime = (port = server.address().port) => fs.writeFileSync(runtime,
+    JSON.stringify({ app: 'agentpaw', port, token }));
+  writeRuntime();
+  const check = async (name, run) => {
+    try { await run(); } catch (error) { failures.push(`${name}: ${error.message}`); }
+  };
+  const rows = (sid, event) => got.filter((body) => body.session_id === sid && (!event || body.event === event));
+  const usage = () => fs.existsSync(usageFile) ? fs.readFileSync(usageFile, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : [];
+  async function host(options = {}) {
+    const callbacks = new Map();
+    const registrations = [];
+    const queue = [];
+    const reads = [];
+    let wake;
+    let closed = false;
+    let returns = 0;
+    const iterator = {
+      next() {
+        if (closed) return Promise.resolve({ done: true });
+        if (queue.length) return Promise.resolve({ done: false, value: queue.shift() });
+        return new Promise((resolve) => { wake = resolve; });
+      },
+      return() {
+        returns++;
+        closed = true;
+        if (wake) { wake({ done: true }); wake = undefined; }
+        return options.hangingReturn ? new Promise(() => {}) : Promise.resolve({ done: true });
+      },
+    };
+    const hook = (domain) => async (name, callback) => {
+      if (options.reject === `${domain}.${name}`) throw new Error('unsupported hook');
+      callbacks.set(`${domain}.${name}`, callback);
+      const registration = { disposed: 0, dispose() { this.disposed++; } };
+      registrations.push(registration);
+      return registration;
+    };
+    const cleanup = await plugin.setup({
+      location: { directory: home },
+      tool: { hook: hook('tool') },
+      session: {
+        hook: hook('session'),
+        async messages(input) {
+          reads.push(input);
+          if (options.readFailure) throw new Error('unavailable');
+          if (options.read) return options.read(input);
+          if (options.hangingRead) return new Promise(() => {});
+          return { data: options.messages || [], cursor: { previous: null, next: null } };
+        },
+      },
+      event: { subscribe: () => ({ [Symbol.asyncIterator]: () => iterator }) },
+    });
+    const dispose = () => typeof cleanup === 'function' ? cleanup() : cleanup.dispose();
+    cleanups.push(dispose);
+    return {
+      cleanup, dispose, callbacks, registrations, reads,
+      get returns() { return returns; },
+      async emit(type, data, extra = {}) {
+        const event = { id: `envelope-${Math.random()}`, type, data, location: { directory: home }, ...extra };
+        if (wake) { const resolve = wake; wake = undefined; resolve({ done: false, value: event }); }
+        else queue.push(event);
+        await sleep(35);
+      },
+      async prompt(sessionID, messageID, text = 'mock prompt') {
+        const callback = callbacks.get('session.prompt');
+        if (callback) await callback({ sessionID, messageID, prompt: { text } });
+        await sleep(35);
+      },
+      async tool(name, input) {
+        const callback = callbacks.get(`tool.${name}`);
+        if (callback) await callback(input);
+        await sleep(35);
+      },
+    };
+  }
+  const tokens = { input: 10, output: 5, reasoning: 2, cache: { read: 3, write: 0 } };
+  const message = (id, extra = {}) => ({
+    id, type: 'assistant', time: { created: 1700000000000, completed: 1700000000010 },
+    agent: 'mock', model: { id: 'mock-model', providerID: 'mock-provider' },
+    content: [], finish: 'tool-calls', cost: 0, tokens, ...extra,
+  });
+  try {
+    const h = await host({ messages: [message('real-a'), message('real-b'),
+      message('incomplete', { time: { created: 1 }, finish: undefined }),
+      message('missing-model', { model: undefined }), message('', {}),
+      message('missing-tokens', { tokens: undefined, cost: undefined })] });
+    await check('cleanup contract', () => assert.strictEqual(typeof h.cleanup, 'function'));
+    await h.emit('session.created', { sessionID: 'v2-root', title: 'root' });
+    await h.emit('session.created', { sessionID: 'v2-child', parentID: 'v2-root' });
+    await h.emit('session.updated', { sessionID: 'v2-child', title: 'child update' });
+    await h.emit('session.created', { sessionID: 'v2-child' });
+    await check('root creation', () => {
+      assert.strictEqual(rows('v2-root', 'SessionStart').length, 1);
+      assert.strictEqual(rows('v2-child', 'SessionStart').length, 0);
+    });
+    await h.emit('session.created', { sessionID: 'v2-foreign' }, { location: { directory: home + '-other' } });
+    await h.emit('session.execution.started', { sessionID: 'v2-foreign' }, { location: undefined });
+    await check('directory ownership', () => assert.strictEqual(rows('v2-foreign').length, 0));
+    await h.prompt('v2-root', 'user-real');
+    await h.emit('session.execution.started', { sessionID: 'v2-root' });
+    await h.emit('session.next.text.started', { sessionID: 'v2-root', messageID: 'text-real' });
+    await h.emit('session.next.text.delta', { sessionID: 'v2-root', delta: 'hello ' });
+    await h.emit('session.next.text.delta', { sessionID: 'v2-root', delta: 'world' });
+    await h.emit('session.next.text.ended', { sessionID: 'v2-root', text: 'replacement' });
+    await h.emit('session.next.text.started', { sessionID: 'v2-root', messageID: 'text-second' });
+    await h.emit('session.next.text.delta', { sessionID: 'v2-root', delta: 'retained' });
+    await h.emit('session.next.text.ended', { sessionID: 'v2-root' });
+    await h.emit('session.usage.updated', { sessionID: 'v2-root', tokens, timestamp: 123 });
+    await h.emit('session.usage.updated', { sessionID: 'v2-root', tokens: { ...tokens, input: 100 }, timestamp: 124 });
+    await h.emit('session.step.ended', { sessionID: 'v2-root', tokens });
+    await check('step is not completion', () => assert.strictEqual(rows('v2-root', 'Stop').length, 0));
+    await h.emit('session.execution.succeeded', { sessionID: 'v2-root' });
+    await h.emit('session.execution.succeeded', { sessionID: 'v2-root' });
+    await check('prompt and terminal output', () => {
+      assert.strictEqual(rows('v2-root', 'UserPromptSubmit').length, 1);
+      assert.strictEqual(rows('v2-root', 'UserPromptSubmit')[0].session_title, 'mock prompt');
+      assert.strictEqual(rows('v2-root', 'Stop').length, 1);
+      assert.strictEqual(rows('v2-root', 'Stop')[0].assistant_last_output, 'replacement\nretained');
+    });
+    await check('durable usage IDs, zero cost and replay', () => {
+      assert.deepStrictEqual(usage().map((row) => row.message_id).sort(), ['real-a', 'real-b']);
+      assert(usage().every((row) => row.cost === 0 && row.model === 'mock-model' && row.provider === 'mock-provider' && row.ts === 1700000000010));
+      assert(h.reads.length > 0);
+      assert(h.reads.every((input) => input.sessionID === 'v2-root' && input.order === 'desc' && input.limit > 0 && input.limit <= 100));
+    });
+    await h.emit('session.execution.started', { sessionID: 'v2-abort' });
+    await h.emit('session.execution.interrupted', { sessionID: 'v2-abort' });
+    await h.emit('session.execution.succeeded', { sessionID: 'v2-abort' });
+    await check('interrupt does not celebrate', () => {
+      assert.strictEqual(rows('v2-abort', 'Stop').length, 0);
+      assert.strictEqual(rows('v2-abort', 'TurnAborted')[0].state, 'idle');
+    });
+    await h.emit('session.execution.started', { sessionID: 'v2-fail' });
+    await h.emit('session.execution.failed', { sessionID: 'v2-fail', error: { message: 'mock failure' } });
+    await check('execution failure', () => assert.strictEqual(rows('v2-fail', 'StopFailure')[0].api_error_type, 'mock failure'));
+    await h.tool('execute.before', { sessionID: 'v2-tools', tool: 'subagent', id: 'call', messageID: 'msg', input: {} });
+    await h.tool('execute.after', { sessionID: 'v2-tools', tool: 'subagent', id: 'call', messageID: 'msg', status: 'error', error: 'mock tool error' });
+    await check('subagent and after error', () => {
+      assert.strictEqual(rows('v2-tools', 'PreToolUse')[0].state, 'juggling');
+      assert.strictEqual(rows('v2-tools', 'PostToolUseFailure')[0].state, 'error');
+    });
+    await h.emit('form.created', { form: { sessionID: 'v2-wait', id: 'f1', fields: [] } });
+    await h.emit('permission.asked', { sessionID: 'v2-wait', id: 'p1', action: 'read', resources: [] });
+    await h.emit('permission.asked', { sessionID: 'v2-wait', id: 'p2', action: 'read', resources: [] });
+    await h.emit('form.replied', { sessionID: 'v2-wait', id: 'f1', answer: {} });
+    await h.emit('permission.replied', { sessionID: 'v2-wait', requestID: 'p1', reply: 'once' });
+    await h.emit('session.execution.succeeded', { sessionID: 'v2-wait' });
+    await check('multiple waits', () => {
+      assert(rows('v2-wait', 'Notification').length > 0);
+      assert.strictEqual(rows('v2-wait', 'ElicitationResult').length, 0);
+      assert.strictEqual(rows('v2-wait', 'Stop').length, 0);
+    });
+    await h.emit('permission.replied', { sessionID: 'v2-wait', requestID: 'p2', reply: 'once' });
+    await check('last wait resumes', () => assert.strictEqual(rows('v2-wait', 'ElicitationResult').length, 1));
+    await h.emit('session.deleted', { sessionID: 'v2-wait' });
+    await h.emit('session.execution.started', { sessionID: 'v2-wait' });
+    await check('deletion clears waits', () => assert.strictEqual(rows('v2-wait', 'UserPromptSubmit').length, 1));
+    await h.dispose();
+    await h.dispose();
+    await h.prompt('v2-disposed', 'disposed');
+    await check('cleanup idempotent and unregisters', () => {
+      assert.strictEqual(h.returns, 1);
+      assert(h.registrations.every((r) => r.disposed === 1));
+      assert.strictEqual(rows('v2-disposed').length, 0);
+    });
+    const fallback = await host({ reject: 'session.prompt', hangingReturn: true, readFailure: true }).catch((error) => {
+      failures.push(`registration rejection: ${error.message}`);
+    });
+    if (fallback) {
+      await fallback.emit('session.execution.started', { sessionID: 'v2-fallback' });
+      await fallback.emit('session.execution.succeeded', { sessionID: 'v2-fallback' });
+      await check('rejected prompt recovers from execution', () => assert.strictEqual(rows('v2-fallback', 'UserPromptSubmit').length, 1));
+      await check('nonblocking iterator cleanup', async () => assert(await Promise.race([fallback.dispose().then(() => true), sleep(1200).then(() => false)])));
+      assert(fallback.registrations.every((r) => r.disposed === 1));
+    }
+    const partial = await host({ reject: 'tool.execute.before' }).catch((error) => {
+      failures.push(`partial registration rejection: ${error.message}`);
+    });
+    if (partial) {
+      await check('remaining registrations retained', () => assert(partial.callbacks.has('tool.execute.after') && partial.callbacks.has('session.prompt')));
+      await partial.dispose();
+    }
+    const missing = await host({ hangingRead: true });
+    fs.rmSync(runtime);
+    await missing.emit('session.execution.started', { sessionID: 'v2-no-runtime' });
+    await check('runtime missing', () => assert.strictEqual(rows('v2-no-runtime').length, 0));
+    writeRuntime(1);
+    await missing.emit('session.execution.started', { sessionID: 'v2-offline' });
+    await missing.emit('session.step.ended', { sessionID: 'v2-offline' });
+    await check('hanging read cleanup', async () => assert(await Promise.race([missing.dispose().then(() => true), sleep(1200).then(() => false)])));
+    writeRuntime();
+    const paged = await host({ read: async (input) => ({
+      data: input.cursor ? [message('page-older')] : [message('page-newer')],
+      cursor: { previous: null, next: input.cursor ? null : 'older-page' },
+    }) });
+    await paged.emit('session.step.ended', { sessionID: 'v2-page' });
+    await paged.emit('session.step.ended', { sessionID: 'v2-page' });
+    await check('pagination and repeated step', () => {
+      assert.strictEqual(usage().filter((row) => row.session_id === 'v2-page').length, 2);
+      assert(paged.reads.some((input) => input.cursor === 'older-page' && !('order' in input)));
+    });
+    await paged.dispose();
+    let resolveRead;
+    const late = await host({ read: () => new Promise((resolve) => { resolveRead = resolve; }) });
+    await late.emit('session.step.ended', { sessionID: 'v2-late' });
+    await late.dispose();
+    resolveRead({ data: [message('late-record')], cursor: { next: null } });
+    await sleep(40);
+    await check('no writes after cleanup', () => assert(!usage().some((row) => row.message_id === 'late-record')));
+    const empty = await host();
+    await empty.prompt('v2-empty', 'empty-user');
+    await empty.emit('session.next.text.started', { sessionID: 'v2-empty', messageID: 'empty-text' });
+    await empty.emit('session.next.text.delta', { sessionID: 'v2-empty', delta: 'stale' });
+    await empty.emit('session.next.text.ended', { sessionID: 'v2-empty', text: '' });
+    await empty.emit('session.execution.succeeded', { sessionID: 'v2-empty' });
+    await check('empty ended snapshot replaces text', () => assert(!rows('v2-empty', 'Stop')[0].assistant_last_output));
+    await empty.dispose();
+    await check('absent context and subscription failure', async () => {
+      const absent = await plugin.setup();
+      await absent();
+      const broken = await plugin.setup({ location: { directory: home }, event: { subscribe() { throw new Error('unavailable'); } } });
+      await broken();
+    });
+  } finally {
+    for (const dispose of cleanups) await Promise.race([dispose(), sleep(1200)]);
+    await new Promise((resolve) => server.close(resolve));
+    fs.writeFileSync(runtime, originalRuntime);
+    if (fs.existsSync(usageFile)) fs.rmSync(usageFile);
+  }
+  assert.deepStrictEqual(failures, [], 'v2 driven behavior failures');
+  console.log('v2 driven event/hook capture checks passed');
+}
+
 async function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agentpaw-opencode-plugin-'));
   const home = path.join(root, 'home');
@@ -54,6 +302,12 @@ async function main() {
   const tmpPlugin = path.join(root, 'opencode-plugin.mjs');
   fs.copyFileSync(PLUGIN_SRC, tmpPlugin);
   const mod = await import(pathToFileURL(tmpPlugin).href);
+  assert(mod.default, 'v2 default plugin definition is required');
+  assert.strictEqual(mod.default.id, 'agentpaw-opencode');
+  assert.strictEqual(typeof mod.default.setup, 'function');
+
+  await testV2(mod.default, home, token);
+
   const hooks = await mod.AgentPawOpenCodePlugin({ directory: home });
   assert.strictEqual(typeof hooks.event, 'function');
   assert.strictEqual(typeof hooks['tool.execute.before'], 'function');
@@ -69,6 +323,7 @@ async function main() {
   assert.strictEqual(start.state, 'idle');
   assert.strictEqual(start.session_id, 'sess-1');
   assert.strictEqual(start.agent_id, 'opencode');
+  assert.strictEqual(start.source_pid, process.pid, 'plugin reports its running service PID for desktop focus');
   assert.strictEqual(start.cwd, 'C:\\proj');
   assert.strictEqual(got[0].token, token, 'x-agentpaw-token header sent');
 

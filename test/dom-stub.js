@@ -73,7 +73,10 @@ function makeElement(tag, id) {
     el.children.splice(index, 0, c);
     return c;
   };
-  el.remove = () => { if (el.parentNode) el.parentNode.children = el.parentNode.children.filter((c) => c !== el); };
+  el.remove = () => {
+    if (el.parentNode) el.parentNode.children = el.parentNode.children.filter((c) => c !== el);
+    el.parentNode = null;
+  };
   // Auto-vivify per-selector children used by the renderer.
   el._selCache = {};
   el.querySelector = (sel) => {
@@ -132,6 +135,8 @@ function createStubWorld() {
 
   // Captured renderer callbacks (registered via window.pet.onX)
   const handlers = { event: null, stats: null, xiabanSchedule: null, petAssets: null, pointerCheck: null };
+  const companionSubscribers = [];
+  handlers.companionState = (value) => companionSubscribers.forEach(cb => cb(value));
   const calls = []; // record of preload calls for assertions
   const behavior = { focusResult: true };
 
@@ -140,7 +145,7 @@ function createStubWorld() {
     onStats: (cb) => { handlers.stats = cb; },
     onXiabanSchedule: (cb) => { handlers.xiabanSchedule = cb; },
     onPetAssets: (cb) => { handlers.petAssets = cb; },
-    onCompanionState: (cb) => { handlers.companionState = cb; },
+    onCompanionState: (cb) => { companionSubscribers.push(cb); },
     onPointerCheck: (cb) => { handlers.pointerCheck = cb; },
     getCompanionState: () => Promise.resolve(behavior.companionState || null),
     restAction: (...a) => {
@@ -224,8 +229,9 @@ function createStubWorld() {
 
 // Load renderer/pet.js (and anything else, e.g. a future shared module) into
 // the stub world. Returns the world for driving + assertions.
-function loadRenderer(files) {
+function loadRenderer(files, configure = () => {}) {
   const world = createStubWorld();
+  configure(world);
   vm.createContext(world.sandbox);
   for (const f of files) {
     const code = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');

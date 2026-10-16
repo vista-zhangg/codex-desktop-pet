@@ -462,7 +462,9 @@ function createMetering(options = {}) {
     return operations.scan(performScan);
   }
 
-  function getStats() {
+  function getStats(options = {}) {
+    const includeModelHistory = options.includeModelHistory !== false;
+    const includeDaily = options.includeDaily !== false;
     const todayK = dayKey(Date.now());
     const today = { ...emptyDay(), ...(state.daily[todayK] || {}) };
     const byModel = state.byModelByDay[todayK] ? { ...state.byModelByDay[todayK] } : {};
@@ -472,15 +474,17 @@ function createMetering(options = {}) {
     // Keep the token components in the daily ledger so the detail panel can
     // calculate range-level cache/input statistics, not just cost/tokens.
     const daily = {};
-    for (const [k, v] of Object.entries(state.daily)) {
-      daily[k] = { ...emptyDay(), ...v };
+    if (includeDaily) {
+      for (const [k, v] of Object.entries(state.daily)) {
+        daily[k] = { ...emptyDay(), ...v };
+      }
     }
 
     return {
       today,
       lifetime: { ...emptyDay(), ...(state.lifetime || {}) },
       byModel,
-      byModelByDay: modelHistory(state.byModelByDay),
+      byModelByDay: includeModelHistory ? modelHistory(state.byModelByDay) : {},
       hourly,
       hourlyTok,
       daily,

@@ -609,6 +609,25 @@ html, body {
 .sess-dot.error { background: #ff5a52; }
 .sess-dot.done { background: #34c759; }
 .sess-dot.idle, .sess-dot.sleeping { background: #6f6f76; }
+.sess-more {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 18px; padding: 0 4px;
+  border: 1px solid currentColor; border-radius: 9px;
+  background: rgba(255, 252, 249, 0.98); color: #6f6f76;
+  font: 650 10px/1 var(--ui-font); font-variant-numeric: tabular-nums;
+  white-space: nowrap; cursor: pointer; -webkit-app-region: no-drag;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+}
+.sess-more:hover { background: #fff; }
+.sess-more:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.sess-more.working, .sess-more.juggling, .sess-more.sweeping { color: #4a9eff; }
+.sess-more.thinking { color: #9a7fd6; }
+.sess-more.loafing { color: #8fb8e8; }
+.sess-more.waiting, .sess-more.needsinput { color: #ffb020; }
+.sess-more.error { color: #ff5a52; }
+.sess-more.done { color: #34c759; }
+.sess-more.idle, .sess-more.sleeping { color: #6f6f76; }
 @keyframes dotPulse {
   0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,176,46,0.6); }
   50% { transform: scale(1.25); box-shadow: 0 0 0 4px rgba(255,176,46,0); }

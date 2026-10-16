@@ -217,7 +217,7 @@ async function normalizeGif(sourcePath, options = {}) {
   } catch {
     throw new GifImportError('decode-failed', 'GIF 帧读取失败，文件可能已损坏');
   }
-  const data = Buffer.from(decoded.data);
+  const data = decoded.data;
   const before = alphaStats(data);
   let backgroundMode = before.transparent ? 'preserved-transparency' : 'kept-opaque';
   let backgroundDominance = null;
@@ -240,20 +240,20 @@ async function normalizeGif(sourcePath, options = {}) {
   const left = Math.floor((TARGET_SIZE - targetWidth) / 2);
   const top = TARGET_SIZE - PADDING - targetHeight;
   const frameStride = width * height * 4;
-  const outputFrames = [];
+  const frameBytes = TARGET_SIZE * TARGET_SIZE * 4;
+  const output = Buffer.alloc(frameBytes * pages);
   for (let page = 0; page < pages; page++) {
     const cropped = cropFrame(data, page * frameStride, width, bounds);
     const resized = await sharp(cropped, { raw: { width: bounds.width, height: bounds.height, channels: 4 } })
       .resize(targetWidth, targetHeight, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
       .raw().toBuffer();
-    const target = Buffer.alloc(TARGET_SIZE * TARGET_SIZE * 4);
+    const target = output.subarray(page * frameBytes, (page + 1) * frameBytes);
     placeFrame(target, resized, targetWidth, targetHeight, left, top);
-    outputFrames.push(target);
   }
 
   let encoded;
   try {
-    encoded = await sharp(Buffer.concat(outputFrames), {
+    encoded = await sharp(output, {
       raw: { width: TARGET_SIZE, height: TARGET_SIZE * pages, channels: 4, pageHeight: TARGET_SIZE },
     }).gif({
       loop: Number.isInteger(metadata.loop) ? metadata.loop : 0,

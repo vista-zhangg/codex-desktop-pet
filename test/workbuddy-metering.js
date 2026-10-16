@@ -102,6 +102,12 @@ async function main() {
   });
   await m.scan();
   const s = m.getStats();
+  const light = m.getStats({ includeModelHistory: false, includeDaily: false });
+  assert(JSON.stringify(light.byModelByDay) === '{}', 'light snapshot skips historical model projection');
+  assert(JSON.stringify(light.today) === JSON.stringify(s.today), 'light snapshot preserves today totals');
+  assert(JSON.stringify(light.lifetime) === JSON.stringify(s.lifetime), 'light snapshot preserves lifetime totals');
+  assert(JSON.stringify(light.daily) === '{}', 'light snapshot skips daily history projection');
+  assert(JSON.stringify(light.byModel) === JSON.stringify(s.byModel), 'light snapshot preserves today model totals');
 
   assert(s.today.tokens === 3150 + 390, `today tokens summed (got ${s.today.tokens})`);
   assert(s.today.input === 3000 + 350 && s.today.output === 150 + 40, 'input/output summed');

@@ -32,11 +32,12 @@ const integrationSource = section('function showPet()', 'function hardenWindow('
 function fixture(preferences = {}) {
   let time = START;
   const disk = new Map();
+  const io = { failWrites: false };
   const configPath = path.join('virtual-state', 'config.json');
   disk.set(configPath, JSON.stringify(preferences));
   const memoryFs = {
     readFileSync(file) { if (!disk.has(file)) throw new Error('ENOENT'); return disk.get(file); },
-    writeFileSync(file, data) { disk.set(file, String(data)); },
+    writeFileSync(file, data) { if (io.failWrites) throw new Error('disk full'); disk.set(file, String(data)); },
     renameSync(from, to) { assert.ok(disk.has(from)); disk.set(to, disk.get(from)); disk.delete(from); },
     mkdirSync() {}, chmodSync() {},
   };
@@ -127,7 +128,7 @@ function fixture(preferences = {}) {
   context.registerIpc();
   context.startCompanionServices();
   const test = {
-    context, config, disk, win, settingsWin, powerMonitor, pushes, timers,
+    context, config, disk, io, win, settingsWin, powerMonitor, pushes, timers,
     counts: () => ({ shows, hides, quotaDeliveries, trayRefreshes, raises }),
     sample: (fullscreen) => detector.emit(fullscreen),
     foreground: () => detector.foreground(),
@@ -281,6 +282,47 @@ check('explicit show cancels timed hiding and quitting callbacks cannot reshow t
   test.context.desktopPresence.stop();
   assert.equal(test.win.visible, false);
   assert.equal(test.counts().shows, before);
+});
+
+check('work peek defaults to automatic dismissal and rejects non-boolean disk values', () => {
+  for (const keepWorkPeekOpen of [undefined, null, 'true', 1, {}, []]) {
+    const test = fixture({ keepWorkPeekOpen });
+    assert.strictEqual(test.state().keepWorkPeekOpen, false);
+  }
+  assert.strictEqual(fixture({ keepWorkPeekOpen: true }).state().keepWorkPeekOpen, true);
+});
+
+check('work peek setting persists, broadcasts, and survives position saves', () => {
+  const test = fixture().attach();
+  for (const keepWorkPeekOpen of [true, false]) {
+    const result = test.invoke(IPC.SET_COMPANION_PREFS, { keepWorkPeekOpen });
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.keepWorkPeekOpen, keepWorkPeekOpen);
+    test.context.persistPos({ x: 120, y: 300 });
+    assert.strictEqual(test.config.reload().keepWorkPeekOpen, keepWorkPeekOpen);
+    for (const target of ['pet', 'settings']) {
+      assert(test.pushes.some(push => push.target === target && push.value.keepWorkPeekOpen === keepWorkPeekOpen));
+    }
+  }
+});
+
+check('work peek rejects invalid or foreign writes without altering saved state', () => {
+  const test = fixture({ keepWorkPeekOpen: true }).attach();
+  for (const keepWorkPeekOpen of [null, 'false', 0, {}, []]) {
+    assert.strictEqual(test.invoke(IPC.SET_COMPANION_PREFS, { keepWorkPeekOpen }).ok, false);
+    assert.strictEqual(test.config.get().keepWorkPeekOpen, true);
+  }
+  assert.strictEqual(test.invoke(IPC.SET_COMPANION_PREFS, { keepWorkPeekOpen: false }, {}).ok, false);
+  assert.strictEqual(test.invoke(IPC.SET_COMPANION_PREFS, { keepWorkPeekOpen: false }, test.win.webContents).ok, false);
+  assert.strictEqual(test.config.reload().keepWorkPeekOpen, true);
+});
+
+check('work peek disk failures report failure and keep the prior setting', () => {
+  const test = fixture({ keepWorkPeekOpen: true }).attach();
+  test.io.failWrites = true;
+  assert.strictEqual(test.invoke(IPC.SET_COMPANION_PREFS, { keepWorkPeekOpen: false }).ok, false);
+  assert.strictEqual(test.config.get().keepWorkPeekOpen, true);
+  assert.strictEqual(test.config.reload().keepWorkPeekOpen, true);
 });
 
 check('settings IPC saves custom durations and window position saves preserve them', () => {

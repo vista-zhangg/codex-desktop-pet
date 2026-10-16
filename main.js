@@ -507,6 +507,7 @@ function hidePet() {
 function companionState() {
   return {
     quietMinutes: config.get().quietMinutes,
+    keepWorkPeekOpen: config.get().keepWorkPeekOpen,
     rest: restReminders ? restReminders.getState() : { preferences: config.get().restReminders, pending: null },
     visibility: { ...(petVisibility ? petVisibility.snapshot() : { visible: true, autoHideFullscreen: config.get().autoHideFullscreen, quietUntil: 0 }),
       ...((desktopLocked || desktopPaused) ? { visible: false } : {}) },
@@ -735,10 +736,10 @@ function meterInstances() {
   };
 }
 
-function meterStats() {
+function meterStats(options = {}) {
   return Object.fromEntries(withSourceValues(meterInstances()).map(({ id, value }) => [
     id,
-    value && typeof value.getStats === 'function' ? value.getStats() : null,
+    value && typeof value.getStats === 'function' ? value.getStats(options) : null,
   ]));
 }
 
@@ -926,13 +927,14 @@ function emitStats() {
   if (!core) return;
   const snapshot = core.buildSnapshot();
   // 一次性获取 metering 数据，避免多次调用 getStats()
-  const cachedMeter = meterStats();
+  const panelOpen = !!(panelWin && !panelWin.isDestroyed());
+  const cachedMeter = meterStats({ includeModelHistory: panelOpen, includeDaily: panelOpen });
   lastStats = buildStats('all', snapshot, cachedMeter);
   if (taskNotifications) taskNotifications.reconcile(lastStats.sessions);
   for (const st of petStates()) sendWin(st.win, IPC.PET_STATS, lastStats);
   // Historical model matrices belong to the details window. Keep them off
   // the pet's frequent stats channel and skip their projection when closed.
-  if (panelWin && !panelWin.isDestroyed()) sendPanel(IPC.PANEL_STATS, panelStats(lastStats, cachedMeter));
+  if (panelOpen) sendPanel(IPC.PANEL_STATS, panelStats(lastStats, cachedMeter));
 }
 
 function panelStats(stats, meters = meterStats()) {
@@ -1286,14 +1288,23 @@ function registerIpc() {
   };
 
   ipcMain.handle(IPC.GET_STATS, (event) => {
-    const stats = lastStats || buildStats();
-    return panelWin && event.sender === panelWin.webContents ? panelStats(stats) : stats;
+    const fromPanel = panelWin && event.sender === panelWin.webContents;
+    if (fromPanel) {
+      const meters = meterStats({ includeModelHistory: true, includeDaily: true });
+      return panelStats(buildStats('all', null, meters), meters);
+    }
+    return lastStats || buildStats('all', null, meterStats({ includeModelHistory: false, includeDaily: false }));
   });
   const companionSender = (e) => !!stateOfSender(e.sender)
     || !!(settingsWin && !settingsWin.isDestroyed() && e.sender === settingsWin.webContents);
   ipcMain.handle(IPC.GET_COMPANION_STATE, (e) => companionSender(e) ? companionState() : null);
   ipcMain.handle(IPC.SET_COMPANION_PREFS, (e, value) => {
     if (!settingsWin || settingsWin.isDestroyed() || e.sender !== settingsWin.webContents || !value || typeof value !== 'object') return { ok: false };
+    if (Object.prototype.hasOwnProperty.call(value, 'keepWorkPeekOpen')) {
+      if (typeof value.keepWorkPeekOpen !== 'boolean') return { ok: false };
+      try { config.save({ keepWorkPeekOpen: value.keepWorkPeekOpen }, { strict: true }); }
+      catch { return { ok: false, ...companionState() }; }
+    }
     if (value.restReminders && typeof value.restReminders === 'object') {
       const saved = config.save({ restReminders: { ...config.get().restReminders, ...value.restReminders } });
       if (restReminders) restReminders.setPreferences(saved.restReminders);

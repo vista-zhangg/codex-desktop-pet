@@ -33,6 +33,9 @@ async function main() {
   assert(existing.meta.frames > 1);
   assert.strictEqual(existing.meta.backgroundMode, 'preserved-transparency');
   assertGifHeader(existing.buffer);
+  const existingAgain = await normalizeGif(path.join(root, 'assets', 'cat', 'cat-working.gif'));
+  assert.strictEqual(existingAgain.meta.frames, existing.meta.frames);
+  assert(existingAgain.buffer.equals(existing.buffer), 'GIF normalization output is deterministic after buffer reuse');
   const existingMeta = await sharp(existing.buffer, { animated: true }).metadata();
   assert.strictEqual(existingMeta.pageHeight, 120);
   assert.strictEqual(existingMeta.pages, existing.meta.frames);

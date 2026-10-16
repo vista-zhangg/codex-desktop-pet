@@ -34,6 +34,13 @@ assert.strictEqual(meter._ingest('message-1|request-1', now, 'claude-opus-4-1', 
 assert.strictEqual(meter._ingest('message-1|request-1', now, 'claude-opus-4-1', final), false);
 
 const stats = meter.getStats();
+const lightStats = meter.getStats({ includeModelHistory: false, includeDaily: false });
+assert.deepStrictEqual(lightStats.byModelByDay, {}, 'light snapshot skips historical model projection');
+assert.deepStrictEqual(lightStats.today, stats.today, 'light snapshot preserves today totals');
+assert.deepStrictEqual(lightStats.lifetime, stats.lifetime, 'light snapshot preserves lifetime totals');
+assert.deepStrictEqual(lightStats.daily, {}, 'light snapshot skips daily history projection');
+assert.deepStrictEqual(lightStats.byModel, stats.byModel, 'light snapshot preserves today model totals');
+assert.strictEqual(Object.keys(stats.byModelByDay).length > 0, true, 'full snapshot keeps historical model projection');
 assert.strictEqual(stats.today.msgs, 1, 'streaming updates must remain one turn');
 assert.strictEqual(stats.today.output, 372, 'final output usage must win over the first partial row');
 assert.strictEqual(stats.today.cacheWrite5m, 20);

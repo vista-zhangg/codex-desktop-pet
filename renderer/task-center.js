@@ -228,9 +228,13 @@
       openPeek();
     } else if (command === 'actions') { if (!actionPopOpen) openActionPop(); selectTab('actions'); }
   });
-  window.AgentPawTaskCenter = { render, opened() {
+  window.AgentPawTaskCenter = { render, openSessions() {
+    selectTab('sessions');
+    if (radialOpen) closeRadial();
+    if (!actionPopOpen) openActionPop('sessions');
+  }, opened(preferredTab) {
     editingId = ''; status.textContent = ''; render(lastStats);
     const pending = actionableItems().length || lastStats?.waitingCount || lastStats?.needsinputCount;
-    selectTab(pending ? 'actions' : (lastStats?.recent || []).length ? 'recent' : 'sessions', false, true);
+    selectTab(preferredTab === 'sessions' ? 'sessions' : pending ? 'actions' : (lastStats?.recent || []).length ? 'recent' : 'sessions', false, true);
   }, closed() { editingId = ''; sessionSignature = ''; } };
 })();

@@ -692,6 +692,7 @@ function settleEdgeLayout() {
   // No screen coordinates in the headless renderer tests; the real Electron
   // window always has them. This also avoids inventing a desktop in Node.
   if (!petGeometrySnapshot()) return;
+  if (peekOpen && keepWorkPeekOpen) { fitPopup(peekEl); return; }
   // Keep the intrinsic capsule width while re-evaluating the edge anchor.
   // Resetting to the old 320px base here would briefly reintroduce clipping
   // after a drag or immediately before the radial menu is laid out.
@@ -1220,7 +1221,7 @@ function maybeCloseEmptyPop() {
   if (!actionableItems().length) closeActionPop();
 }
 
-function openActionPop() {
+function openActionPop(initialTab) {
   clearTimeout(bubbleTimer);
   bubbleTimer = null;
   bubble.classList.add('hidden');
@@ -1233,7 +1234,7 @@ function openActionPop() {
   renderActionPop();
   actionPop.classList.remove('hidden');
   actionPopOpen = true;
-  if (window.AgentPawTaskCenter) window.AgentPawTaskCenter.opened();
+  if (window.AgentPawTaskCenter) window.AgentPawTaskCenter.opened(initialTab);
   fitPopup(actionPop);
 }
 function closeActionPop() {
@@ -1277,6 +1278,23 @@ let peekOpen = false;
 let peekTimer = null;
 let peekLayoutSig = '';
 let peekPrimarySessionId = '';
+let keepWorkPeekOpen = false;
+let peekPreferenceReceived = false;
+
+function applyPeekPreference(value) {
+  if (!value || typeof value.keepWorkPeekOpen !== 'boolean') return;
+  peekPreferenceReceived = true;
+  if (keepWorkPeekOpen === value.keepWorkPeekOpen) return;
+  keepWorkPeekOpen = value.keepWorkPeekOpen;
+  armPeekTimer();
+}
+
+if (window.pet.onCompanionState) window.pet.onCompanionState(applyPeekPreference);
+if (window.pet.getCompanionState) {
+  window.pet.getCompanionState().then(value => {
+    if (!peekPreferenceReceived) applyPeekPreference(value);
+  }).catch(() => {});
+}
 
 function peekAgentLabel(agent) {
   try {
@@ -1457,7 +1475,7 @@ function clearPeekTimer() {
 
 function armPeekTimer() {
   clearPeekTimer();
-  if (peekOpen) peekTimer = setTimeout(closePeek, PEEK_AUTO_CLOSE_MS);
+  if (peekOpen && !keepWorkPeekOpen) peekTimer = setTimeout(closePeek, PEEK_AUTO_CLOSE_MS);
 }
 
 function openPeek() {
@@ -1490,7 +1508,7 @@ function handleCatClick() {
   if (askActive) { hideAsk(); return; }
   if (actionPopOpen) { closeActionPop(); return; }
   if (quotaPopoverOpen) { closeQuotaPopover(); return; }
-  if (peekOpen) { closePeek(); return; }
+  if (peekOpen) { if (!keepWorkPeekOpen) closePeek(); return; }
 
   const acts = actionableItems();
   if (acts.length > 1) { openActionPop(); return; }
@@ -2463,21 +2481,76 @@ window.pet.onXiabanSchedule((schedule) => applyXiabanSchedule(schedule));
 if (window.pet.onPetAssets) window.pet.onPetAssets((catalog) => applyPetAssetCatalog(catalog));
 window.pet.onStats(applyStats);
 
+const SESSION_DOT_LIMIT = 8;
+const SESSION_DOT_IDLE_MS = 2 * 60 * 1000;
+const sessionDotHistory = new Map();
+let sessionMoreButton = null;
+
+function visibleSessionDots(sessions) {
+  const now = Date.now();
+  const retained = new Set();
+  const visible = [];
+  for (const s of Array.isArray(sessions) ? sessions : []) {
+    if (!isBaseVisibleSession(s) || s.archived) continue;
+    const key = s.sessionId || s;
+    retained.add(key);
+    if (PEEK_BUSY_STATES.has(s.state)) {
+      sessionDotHistory.delete(key);
+      visible.push(s);
+      continue;
+    }
+    if (s.state !== 'idle') continue;
+    let history = sessionDotHistory.get(key);
+    if (!history) {
+      const idleMs = Number.isFinite(s.idleMs) && s.idleMs >= 0 ? s.idleMs : 0;
+      history = { expiresAt: now + Math.max(0, SESSION_DOT_IDLE_MS - idleMs), result: false };
+      sessionDotHistory.set(key, history);
+    }
+    if (s.badge === 'done' || s.badge === 'interrupted') {
+      history.result = true;
+      visible.push(s);
+    } else if (!history.result && now < history.expiresAt) {
+      visible.push(s);
+    }
+  }
+  for (const key of sessionDotHistory.keys()) if (!retained.has(key)) sessionDotHistory.delete(key);
+  const priority = s => s.state === 'waiting' || s.state === 'needsinput' ? 0
+    : s.state === 'error' || (s.state === 'idle' && s.badge === 'interrupted') ? 1
+      : PEEK_BUSY_STATES.has(s.state) ? 2 : s.badge === 'done' ? 3 : 4;
+  return visible.sort((a, b) => priority(a) - priority(b) || Number(!!b.pinned) - Number(!!a.pinned)
+    || (Number.isFinite(a.idleMs) ? a.idleMs : 0) - (Number.isFinite(b.idleMs) ? b.idleMs : 0)
+    || String(a.sessionId || '').localeCompare(String(b.sessionId || '')));
+}
+
 function renderSessions(sessions) {
-  sessionsEl.innerHTML = '';
-  // 头顶状态点只展示可见会话，并按状态优先级排列。
-  const list = (sessions || []).filter(isBaseVisibleSession).sort((a, b) => {
-    const pa = SESS_SORT[a.state] != null ? SESS_SORT[a.state] : 3;
-    const pb = SESS_SORT[b.state] != null ? SESS_SORT[b.state] : 3;
-    return pa !== pb ? pa - pb : (a.idleMs || 0) - (b.idleMs || 0);
-  });
-  for (const s of list) {
+  const list = visibleSessionDots(sessions);
+  for (const child of [...sessionsEl.children]) if (child !== sessionMoreButton) child.remove();
+  for (const s of list.slice(0, SESSION_DOT_LIMIT)) {
     const d = document.createElement('div');
     d.className = 'sess-dot ' + sessionDotClass(s);
-    const label = s.state === 'waiting' ? waitPhrase(s.reason) : (sessMeta(s.state) || s.state);
-    d.title = `${s.project} · ${label}`;
+    const label = s.state === 'idle' && s.badge === 'done' ? t('peek.done')
+      : s.state === 'idle' && s.badge === 'interrupted' ? t('peek.interrupted')
+        : s.state === 'waiting' ? waitPhrase(s.reason) : (sessMeta(s.state) || s.state);
+    d.title = `${s.alias || s.project || t('peek.unknownProject')} · ${label}`;
     d.setAttribute('aria-hidden', 'true');
-    sessionsEl.appendChild(d);
+    sessionsEl.insertBefore(d, sessionMoreButton && sessionMoreButton.parentNode === sessionsEl ? sessionMoreButton : null);
+  }
+  if (list.length > SESSION_DOT_LIMIT) {
+    if (!sessionMoreButton) {
+      sessionMoreButton = document.createElement('button');
+      sessionMoreButton.type = 'button';
+      sessionMoreButton.addEventListener('click', e => {
+        e.stopPropagation();
+        if (window.AgentPawTaskCenter) window.AgentPawTaskCenter.openSessions();
+      });
+    }
+    const more = sessionMoreButton;
+    more.className = 'sess-more ' + sessionDotClass(list[SESSION_DOT_LIMIT]);
+    more.textContent = '+' + (list.length - SESSION_DOT_LIMIT);
+    more.setAttribute('aria-label', t('sess.more', { count: list.length - SESSION_DOT_LIMIT }));
+    if (more.parentNode !== sessionsEl) sessionsEl.appendChild(more);
+  } else if (sessionMoreButton) {
+    sessionMoreButton.remove();
   }
   if (propEl && propEl.classList.contains('on')) positionProp();
 }
@@ -2571,7 +2644,7 @@ function finishDrag(el, e, cancelled) {
   try { el.releasePointerCapture(gesture.pid); } catch {}
   try { window.pet.endWinDrag(gesture.id); } catch {}
   if (wasMove) {
-    if (peekOpen) closePeek();
+    if (peekOpen && !keepWorkPeekOpen) closePeek();
     // END_WIN_DRAG is sent after the final position, so the queued size/anchor
     // settlement cannot revive an already released movement gesture.
     setTimeout(() => {
@@ -2768,7 +2841,7 @@ document.addEventListener('keydown', (e) => {
     closeQuotaPopover();
     return;
   }
-  if (e.key === 'Escape' && peekOpen) {
+  if (e.key === 'Escape' && peekOpen && !keepWorkPeekOpen) {
     e.preventDefault();
     closePeek();
   }
@@ -3033,7 +3106,7 @@ radial.addEventListener('click', () => closeRadial());
 window.addEventListener('blur', () => {
   if (actionPopOpen) closeActionPop();
   if (radialOpen) closeRadial();
-  if (peekOpen) closePeek();
+  if (peekOpen && !keepWorkPeekOpen) closePeek();
   if (quotaPopoverOpen) closeQuotaPopover();
 });
 
@@ -3065,7 +3138,7 @@ window.addEventListener('blur', () => {
 // The capsule is still the drag handle when the cat is hidden, while the
 // quota group is a deliberate click target in either layout. The rest of the
 // visible capsule remains click-through so hovering it never creates a popup.
-const HIT_SEL = '#cat,#stage.cat-hidden #chip,#chip-quota,#quota-popover,#radial,#notepad,#action-pop,#ask,#peek,#rest-reminder,#rest-pending';
+const HIT_SEL = '#cat,#stage.cat-hidden #chip,#chip-quota,#quota-popover,#radial,#notepad,#action-pop,#ask,#peek,#rest-reminder,#rest-pending,.sess-more';
 let mouseIgnoring = false;
 function setMouseIgnore(on) {
   if (on === mouseIgnoring) return;

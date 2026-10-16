@@ -591,7 +591,9 @@ function createCodexMetering(options = {}) {
     return Object.values(state.files).flatMap(file => file.quotaEvents || []);
   }
 
-  function getStats() {
+  function getStats(options = {}) {
+    const includeModelHistory = options.includeModelHistory !== false;
+    const includeDaily = options.includeDaily !== false;
     const todayKey = dayKey(Date.now());
     const today = { ...emptyDay(), ...(state.daily[todayKey] || {}) };
     const byModel = state.byModelByDay[todayKey] ? { ...state.byModelByDay[todayKey] } : {};
@@ -604,11 +606,11 @@ function createCodexMetering(options = {}) {
       lifetime: { ...emptyDay(), ...state.lifetime },
       hourlyTok: (state.hourlyByDay[todayKey] || new Array(24).fill(0)).slice(),
       hourly: (state.hourlyCostByDay[todayKey] || new Array(24).fill(0)).slice(),
-      daily: Object.fromEntries(Object.entries(state.daily).map(([key, value]) => [
+      daily: includeDaily ? Object.fromEntries(Object.entries(state.daily).map(([key, value]) => [
         key, { ...emptyDay(), ...value },
-      ])),
+      ])) : {},
       byModel,
-      byModelByDay: modelHistory(state.byModelByDay),
+      byModelByDay: includeModelHistory ? modelHistory(state.byModelByDay) : {},
       diagnostics: {
         ...state.diagnostics,
         sessions: Object.keys(state.sessions).length,

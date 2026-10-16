@@ -48,6 +48,18 @@
           </div>
           <div id="setting-status" class="setting-status" aria-live="polite"></div>
           <p class="hint" data-i18n="settings.hint">修改会立即生效，下次登录 Windows 时自动运行。</p>
+        </section><section class="settings-section">
+          <div class="section-kicker" data-i18n="settings.keepWorkPeekOpenSection">工作速览</div>
+          <div class="setting-card">
+            <div class="setting-copy">
+              <div class="setting-title" data-i18n="settings.keepWorkPeekOpenTitle">保持工作速览展开</div>
+              <div id="keep-work-peek-open-description" class="setting-description" data-i18n="settings.keepWorkPeekOpenDescription">开启后，点击空白、移出鼠标、按 Esc 或再次点击头像都不会收起工作速览；拖动图标时保持展开并随图标移动。点击 X 关闭，切换面板或处理任务时仍会收起。</div>
+            </div>
+            <button id="keep-work-peek-open-toggle" class="switch" type="button" role="switch" aria-checked="false" aria-label="保持工作速览展开" data-i18n-title="settings.keepWorkPeekOpenTitle" aria-describedby="keep-work-peek-open-description" disabled>
+              <span class="switch-thumb" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div id="keep-work-peek-open-status" class="setting-status" role="status" aria-live="polite"></div>
         </section><section class="settings-section" id="privacy-section">
           <div class="section-kicker" data-i18n="settings.privacySection">隐私保护</div>
           <div class="setting-card">

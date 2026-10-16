@@ -63,6 +63,10 @@
     'settings.failed': '保存失败，请重试',
     'settings.unsupported': '当前系统不支持此设置',
     'settings.hint': '修改会立即生效，下次登录 Windows 时自动运行。',
+    'settings.keepWorkPeekOpenSection': '工作速览',
+    'settings.keepWorkPeekOpenTitle': '保持工作速览展开',
+    'settings.keepWorkPeekOpenDescription': '开启后，点击空白、移出鼠标、按 Esc 或再次点击头像都不会收起工作速览；拖动图标时保持展开并随图标移动。点击 X 关闭，切换面板或处理任务时仍会收起。',
+    'settings.keepWorkPeekOpenLoadFailed': '工作速览设置加载失败，请重新打开设置',
     'settings.privacySection': '隐私保护',
     'settings.privacyTitle': '隐私模式',
     'settings.privacyDescription': '隐藏项目名、消息、命令和操作明细，保留状态与用量',
@@ -308,6 +312,7 @@
 
     // ── session labels ──────────────────────────────────────────────────────
     'sess.fallbackName': '会话',
+    'sess.more': '另有 {count} 个会话，打开会话列表',
 
     'bub.loved': '🥰 谢谢夸奖！',
     'bub.sad': '😢 别生气…',

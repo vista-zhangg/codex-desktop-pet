@@ -41,10 +41,49 @@ initializeChipDisplay();
   const save = $('rest-save');
   const status = $('rest-settings-status');
   const fullscreen = $('fullscreen-toggle');
+  const workPeek = $('keep-work-peek-open-toggle');
+  const workPeekStatus = $('keep-work-peek-open-status');
+  let workPeekLoaded = false;
+  let workPeekSaving = false;
+  let stateRevision = 0;
   let saving = false;
   let dirty = false;
   let loaded = false;
   const checked = (el) => el.getAttribute('aria-checked') === 'true';
+  function refreshWorkPeek() {
+    workPeek.disabled = workPeekSaving || !workPeekLoaded;
+  }
+  function showWorkPeekStatus(key = null, error = false) {
+    workPeekStatus.textContent = key ? t(key) : '';
+    workPeekStatus.classList.toggle('error', error);
+  }
+  function renderWorkPeek(value) {
+    if (!value || typeof value !== 'object' || value.ok === false) return false;
+    if (Object.prototype.hasOwnProperty.call(value, 'keepWorkPeekOpen')
+      && typeof value.keepWorkPeekOpen !== 'boolean') return false;
+    const next = value.keepWorkPeekOpen === true;
+    const changed = !workPeekLoaded || checked(workPeek) !== next;
+    workPeekLoaded = true;
+    workPeek.setAttribute('aria-checked', String(next));
+    if (changed && !workPeekSaving) showWorkPeekStatus();
+    refreshWorkPeek();
+    return true;
+  }
+  workPeek.addEventListener('click', async () => {
+    if (!workPeekLoaded || workPeekSaving || workPeek.disabled) return;
+    const revision = stateRevision;
+    workPeekSaving = true;
+    refreshWorkPeek();
+    showWorkPeekStatus('settings.saving');
+    try {
+      const value = await window.pet.setCompanionPreferences({ keepWorkPeekOpen: !checked(workPeek) });
+      if (!value || value.ok !== true || typeof value.keepWorkPeekOpen !== 'boolean') throw new Error('save');
+      if (revision === stateRevision) renderWorkPeek(value);
+      showWorkPeekStatus('settings.saved');
+    } catch { showWorkPeekStatus('settings.failed', true); }
+    finally { workPeekSaving = false; refreshWorkPeek(); }
+  });
+  refreshWorkPeek();
   function refreshControls() {
     master.disabled = saving || !loaded;
     save.disabled = saving || !loaded;
@@ -140,9 +179,26 @@ initializeChipDisplay();
     } catch { $('fullscreen-status').textContent = '安静时长保存失败，请重试'; }
     finally { $('quiet-menu').disabled = false; }
   });
-  if (window.pet.onCompanionState) window.pet.onCompanionState(value => render(value));
+  if (window.pet.onCompanionState) window.pet.onCompanionState(value => {
+    if (!value || typeof value !== 'object' || value.ok === false) return;
+    if (renderWorkPeek(value)) stateRevision += 1;
+    render(value);
+  });
   refreshControls();
-  window.pet.getCompanionState().then(value => render(value, true)).catch(() => { status.textContent = '陪伴设置加载失败，请重新打开设置'; });
+  const initialRevision = stateRevision;
+  (async () => {
+    try {
+      const value = await window.pet.getCompanionState();
+      if (stateRevision !== initialRevision) return;
+      if (!value || typeof value !== 'object' || value.ok === false) throw new Error('load');
+      renderWorkPeek(value);
+      render(value, true);
+    } catch {
+      if (stateRevision !== initialRevision) return;
+      showWorkPeekStatus('settings.keepWorkPeekOpenLoadFailed', true);
+      status.textContent = '陪伴设置加载失败，请重新打开设置';
+    }
+  })();
 })();
 
 function renderChipPreview(value) {

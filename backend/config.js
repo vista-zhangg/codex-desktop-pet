@@ -23,6 +23,7 @@ const DEFAULTS = Object.freeze({
   hooksEnabled: true,
   autoUpdateEnabled: true,
   privacyMode: false,
+  keepWorkPeekOpen: false,
   showCat: true,
   showStatus: true,
   showQuota: true,
@@ -54,6 +55,7 @@ function sanitize(raw) {
   if (typeof raw.hooksEnabled === 'boolean') out.hooksEnabled = raw.hooksEnabled;
   if (typeof raw.autoUpdateEnabled === 'boolean') out.autoUpdateEnabled = raw.autoUpdateEnabled;
   if (typeof raw.privacyMode === 'boolean') out.privacyMode = raw.privacyMode;
+  if (typeof raw.keepWorkPeekOpen === 'boolean') out.keepWorkPeekOpen = raw.keepWorkPeekOpen;
   if (typeof raw.autoHideFullscreen === 'boolean') out.autoHideFullscreen = raw.autoHideFullscreen;
   if (Number.isInteger(raw.quietMinutes) && raw.quietMinutes >= 1 && raw.quietMinutes <= 1440) out.quietMinutes = raw.quietMinutes;
   out.restReminders = restPreferences.sanitizePreferences(raw.restReminders);
@@ -84,10 +86,11 @@ function load() {
   return cache;
 }
 
-function save(partial) {
+function save(partial, { strict = false } = {}) {
   // Another process can toggle integrations while the app is running. Merge
   // against disk, not the in-process cache, so a later window-position save
   // cannot silently re-enable hooks that the CLI just uninstalled.
+  const previous = cache;
   cache = sanitize({ ...readDisk(), ...partial });
   try {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
@@ -95,7 +98,9 @@ function save(partial) {
     fs.writeFileSync(tmp, JSON.stringify(cache, null, 2), { encoding: 'utf8', mode: 0o600 });
     fs.renameSync(tmp, CONFIG_PATH);
     try { fs.chmodSync(CONFIG_PATH, 0o600); } catch {}
-  } catch {}
+  } catch (error) {
+    if (strict) { cache = previous; throw error; }
+  }
   return cache;
 }
 

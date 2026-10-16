@@ -32,8 +32,8 @@ function baseStats(over = {}) {
   };
 }
 
-function world() {
-  const w = loadRenderer(['shared/i18n.js', 'shared/states.js', 'shared/pet-assets.js', 'shared/pet-insights.js', 'renderer/pet.js']);
+function world(configure) {
+  const w = loadRenderer(['shared/i18n.js', 'shared/states.js', 'shared/pet-assets.js', 'shared/pet-insights.js', 'renderer/pet.js'], configure);
   return w;
 }
 const stateClasses = (el) => el.classList.list.filter((c) => STATE_WORDS.includes(c));
@@ -58,6 +58,94 @@ async function main() {
       assert(oi && Array.isArray(oi.RENDER_STATE_WORDS));
       assert.deepStrictEqual(oi.RENDER_STATE_WORDS, States.RENDER_STATE_WORDS);
     });
+  }
+
+  console.log('[R0-dots] 会话圆点展示期限、数量与聚合');
+  {
+    const w = world();
+    const rows = () => w.elements('sessions').children;
+    const snapshot = sessions => w.handlers.stats(baseStats({ sessions }));
+    const session = (sessionId, state = 'working', extra = {}) => ({ sessionId, project: sessionId, agent: 'codex', state, idleMs: 0, ...extra });
+    snapshot(Array.from({ length: 12 }, (_, i) => session('busy-' + i)));
+    check('最多8个圆点及一个聚合按钮', () => {
+      assert.strictEqual(rows().filter(row => row.classList.contains('sess-dot')).length, 8);
+      assert.strictEqual(rows().at(-1).textContent, '+4');
+      assert.strictEqual(rows().at(-1).tagName, 'BUTTON');
+      assert(rows().at(-1).getAttribute('aria-label').includes('4'));
+    });
+    let openedSessions = 0;
+    w.window.AgentPawTaskCenter = { openSessions() { openedSessions++; } };
+    rows().at(-1).dispatch('click');
+    check('聚合按钮进入完整会话页', () => assert.strictEqual(openedSessions, 1));
+    const more = rows().at(-1);
+    snapshot(Array.from({ length: 13 }, (_, i) => session('busy-' + i)));
+    check('周期刷新复用聚合按钮保持键盘焦点', () => {
+      assert.strictEqual(rows().at(-1), more);
+      assert.strictEqual(more.textContent, '+5');
+    });
+    w.document.elementFromPoint = () => ({ closest: selector => selector.includes('.sess-more') ? more : null });
+    w.handlers.pointerCheck({ x: 10, y: 10 });
+    check('聚合按钮能恢复点击而空白仍穿透', () => assert.strictEqual(vm.runInContext('mouseIgnoring', w.sandbox), false));
+    w.document.elementFromPoint = () => null;
+    w.handlers.pointerCheck({ x: -1, y: -1 });
+    check('聚合按钮外不阻挡其他应用', () => assert.strictEqual(vm.runInContext('mouseIgnoring', w.sandbox), true));
+    snapshot(Array.from({ length: 8 }, (_, i) => session('eight-' + i)));
+    check('恰好8个时不显示聚合按钮', () => assert.strictEqual(rows().length, 8));
+    snapshot([session('archived', 'idle', { archived: true, pinned: true }), session('sleep', 'sleeping'), session('background', 'working', { headless: true })]);
+    check('归档、休眠和后台会话不占圆点', () => assert.strictEqual(rows().length, 0));
+
+    snapshot([session('idle', 'idle', { idleMs: 1000 })]);
+    check('近期空闲会话可见', () => assert.strictEqual(rows().length, 1));
+    w.clock.offset += 118000;
+    snapshot([session('idle', 'idle', { idleMs: 0 })]);
+    check('2分钟临界前仍可见', () => assert.strictEqual(rows().length, 1));
+    w.clock.offset += 1001;
+    snapshot([session('idle', 'idle', { idleMs: 0 })]);
+    check('心跳刷新不延长空闲圆点期限', () => assert.strictEqual(rows().length, 0));
+    snapshot([session('idle')]);
+    check('隐藏会话重新工作后出现', () => assert.strictEqual(rows().length, 1));
+    snapshot([session('idle', 'idle', { idleMs: 0 })]);
+    check('新一轮工作后空闲期限重置', () => assert.strictEqual(rows().length, 1));
+    snapshot([session('already-old', 'idle', { idleMs: 120000 })]);
+    check('首次看到已过期空闲会话直接隐藏', () => assert.strictEqual(rows().length, 0));
+    snapshot([session('done', 'idle', { badge: 'done', idleMs: 0 }), session('aborted', 'idle', { badge: 'interrupted', idleMs: 0 })]);
+    check('结果圆点显示完成和中断状态', () => {
+      assert(rows().some(row => row.classList.contains('done')));
+      assert(rows().some(row => row.classList.contains('error')));
+    });
+    snapshot([session('done', 'idle', { idleMs: 0 }), session('aborted', 'idle', { idleMs: 0 })]);
+    check('结果标记消失后不再追加空闲展示时间', () => assert.strictEqual(rows().length, 0));
+    snapshot([session('busy', 'working', { idleMs: 999999 }), session('waiting', 'waiting', { idleMs: 999999 })]);
+    w.clock.offset += 999999;
+    snapshot([session('busy', 'working', { idleMs: 9999999 }), session('waiting', 'waiting', { idleMs: 9999999 })]);
+    check('活动及待处理会话不按时间隐藏', () => assert.strictEqual(rows().length, 2));
+    snapshot(Array.from({ length: 10 }, (_, i) => session('wait-' + i, 'waiting')));
+    check('折叠紧急会话的聚合按钮保留提醒颜色', () => assert(rows().at(-1).classList.contains('waiting')));
+    snapshot([session('done-priority', 'idle', { badge: 'done', idleMs: 0 }), session('ordinary', 'idle'),
+      session('working-priority'), session('interrupt-priority', 'idle', { badge: 'interrupted', idleMs: 0 })]);
+    check('近期中断、活动、完成、普通空闲顺序明确', () => {
+      assert(rows()[0].classList.contains('error'));
+      assert(rows()[1].classList.contains('working'));
+      assert(rows()[2].classList.contains('done'));
+      assert(rows()[3].classList.contains('idle'));
+      assert(rows()[2].title.includes('完成'));
+    });
+    const original = [session('pinned', 'idle', { pinned: true }), session('error', 'error'), session('working'), session('attention', 'needsinput')];
+    snapshot(original);
+    check('待处理与错误优先于活动和关注空闲', () => {
+      assert(rows()[0].classList.contains('needsinput'));
+      assert(rows()[1].classList.contains('error'));
+      assert(rows()[2].classList.contains('working'));
+      assert.strictEqual(original.length, 4);
+      assert.strictEqual(vm.runInContext('lastStats.sessions.length', w.sandbox), 4);
+    });
+    snapshot([]);
+    check('空列表同时清除聚合按钮和展示记录', () => {
+      assert.strictEqual(rows().length, 0);
+      assert.strictEqual(vm.runInContext('sessionDotHistory.size', w.sandbox), 0);
+    });
+    snapshot([session('idle', 'idle', { idleMs: NaN })]);
+    check('会话消失会清理展示记录，非法时间安全处理', () => assert.strictEqual(rows().length, 1));
   }
 
   console.log('[R1] 聚合梯子优先级（对齐 STATES.md）');
@@ -410,6 +498,85 @@ async function main() {
     w.document.dispatch('keydown', { key: 'Escape', preventDefault() {}, stopPropagation() {} });
     check('Esc 关闭速览', () => assert(peek.classList.contains('hidden')));
 
+    const pendingTimers = new Map();
+    const sticky = world(testWorld => {
+      testWorld.sandbox.setTimeout = (fn, delay) => {
+        const timer = { fn, delay };
+        pendingTimers.set(timer, timer);
+        return timer;
+      };
+      testWorld.sandbox.clearTimeout = timer => pendingTimers.delete(timer);
+    });
+    sticky.elements('peek').classList.add('hidden');
+    sticky.handlers.stats(working);
+    clickCat(sticky);
+    const autoTimers = () => [...pendingTimers.values()].filter(timer => timer.delay === 8000);
+    check('默认速览仍启动8秒自动关闭', () => assert.strictEqual(autoTimers().length, 1));
+    sticky.handlers.companionState({ keepWorkPeekOpen: true });
+    check('开启保持展开立即取消待执行关闭计时', () => assert.strictEqual(autoTimers().length, 0));
+    sticky.window.dispatch('blur');
+    check('保持展开时失焦不关闭', () => assert(!sticky.elements('peek').classList.contains('hidden')));
+    sticky.elements('peek').dispatch('pointerleave');
+    check('保持展开时移出鼠标不启动关闭计时', () => assert.strictEqual(autoTimers().length, 0));
+    sticky.document.dispatch('keydown', { key: 'Escape', preventDefault() {}, stopPropagation() {} });
+    check('保持展开时Esc不关闭', () => assert(!sticky.elements('peek').classList.contains('hidden')));
+    clickCat(sticky);
+    check('保持展开时再次点击头像不关闭', () => assert(!sticky.elements('peek').classList.contains('hidden')));
+    sticky.handlers.companionState({ keepWorkPeekOpen: 'false' });
+    sticky.window.dispatch('blur');
+    check('非法广播不改变保持展开策略', () => assert(!sticky.elements('peek').classList.contains('hidden')));
+    sticky.elements('peek-close').dispatch('click');
+    check('保持展开时X仍关闭', () => assert(sticky.elements('peek').classList.contains('hidden')));
+    for (const button of ['peek-focus', 'peek-panel']) {
+      clickCat(sticky);
+      sticky.elements(button).dispatch('click');
+      check(`保持展开时${button}仍收起并执行操作`, () => {
+        assert(sticky.elements('peek').classList.contains('hidden'));
+        assert(sticky.calls.some(([name]) => name === (button === 'peek-focus' ? 'focusSession' : 'openPanel')));
+      });
+    }
+    clickCat(sticky);
+    sticky.elements('peek-list').children[0].dispatch('click');
+    check('保持展开时会话行仍收起', () => assert(sticky.elements('peek').classList.contains('hidden')));
+    for (const kind of ['waiting', 'needsinput', 'error']) {
+      clickCat(sticky);
+      sticky.handlers.event({ kind });
+      check(`保持展开时${kind}提示仍优先展示`, () => assert(sticky.elements('peek').classList.contains('hidden')));
+    }
+    clickCat(sticky);
+    vm.runInContext('openActionPop()', sticky.sandbox);
+    check('保持展开时行动中心切换仍收起速览', () => assert(sticky.elements('peek').classList.contains('hidden')));
+    vm.runInContext('closeActionPop(); openPeek()', sticky.sandbox);
+    sticky.handlers.companionState({ keepWorkPeekOpen: false });
+    check('关闭保持展开立即恢复计时', () => assert.strictEqual(autoTimers().length, 1));
+    const timer = autoTimers()[0];
+    sticky.handlers.companionState({ keepWorkPeekOpen: false });
+    check('重复广播不重置已有计时', () => assert.strictEqual(autoTimers()[0], timer));
+    timer.fn();
+    check('默认8秒计时实际收起速览', () => assert(sticky.elements('peek').classList.contains('hidden')));
+    clickCat(sticky);
+    sticky.window.dispatch('blur');
+    check('关闭保持展开后恢复失焦关闭', () => assert(sticky.elements('peek').classList.contains('hidden')));
+    clickCat(sticky);
+    clickCat(sticky);
+    check('关闭保持展开后恢复头像收起', () => assert(sticky.elements('peek').classList.contains('hidden')));
+
+    const initial = world(testWorld => { testWorld.behavior.companionState = { keepWorkPeekOpen: true }; });
+    await Promise.resolve();
+    initial.elements('peek').classList.add('hidden');
+    initial.handlers.stats(working);
+    clickCat(initial);
+    initial.window.dispatch('blur');
+    check('启动读取已保存保持展开设置', () => assert(!initial.elements('peek').classList.contains('hidden')));
+    const racing = world(testWorld => { testWorld.behavior.companionState = { keepWorkPeekOpen: false }; });
+    racing.handlers.companionState({ keepWorkPeekOpen: true });
+    await Promise.resolve();
+    racing.elements('peek').classList.add('hidden');
+    racing.handlers.stats(working);
+    clickCat(racing);
+    racing.window.dispatch('blur');
+    check('较旧初始化响应不覆盖实时广播', () => assert(!racing.elements('peek').classList.contains('hidden')));
+
     const idleWorld = world();
     idleWorld.elements('peek').classList.add('hidden');
     idleWorld.handlers.stats(baseStats({ idleMs: null, today: { tokens: 8000, cost: 0.04, messages: 3 } }));
@@ -540,6 +707,67 @@ async function main() {
       assert.strictEqual(ends.length, 1, 'pointerup must terminate the drag session once');
       assert.strictEqual(ends[0][1][0], moves[0][1][2].id);
     });
+
+    for (const keepOpen of [true, false]) {
+      for (const finish of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+        const openedDrag = world();
+        openedDrag.handlers.companionState({ keepWorkPeekOpen: keepOpen });
+        openedDrag.elements('peek').classList.add('hidden');
+        openedDrag.handlers.stats(working);
+        openedDrag.window.screenX = 100;
+        openedDrag.window.screenY = 100;
+        openedDrag.window.innerWidth = 520;
+        openedDrag.window.innerHeight = 520;
+        openedDrag.elements('peek').scrollHeight = 180;
+        clickCat(openedDrag);
+        await sleep(15);
+        openedDrag.calls.length = 0;
+        const handle = openedDrag.elements('cat');
+        handle.dispatch('pointerdown', { button: 0, pointerId: 9, screenX: 110, screenY: 110, clientX: 10, clientY: 10 });
+        handle.dispatch('pointermove', { button: 0, pointerId: 9, screenX: 150, screenY: 130, clientX: 50, clientY: 30 });
+        check(`拖动过程中速览保持显示(${keepOpen}, ${finish})`, () => assert(!openedDrag.elements('peek').classList.contains('hidden')));
+        handle.dispatch(finish, { button: 0, pointerId: 9, screenX: 150, screenY: 130, clientX: 50, clientY: 30 });
+        await sleep(20);
+        check(`拖动结束遵循保持展开设置(${keepOpen}, ${finish})`, () => {
+          assert.strictEqual(openedDrag.elements('peek').classList.contains('hidden'), !keepOpen);
+          assert.strictEqual(openedDrag.calls.filter(([name]) => name === 'endWinDrag').length, 1);
+          const sizes = openedDrag.calls.filter(([name]) => name === 'setPetSize');
+          assert(sizes.length > 0, 'drag settlement must fit the current window');
+          assert.strictEqual(sizes.at(-1)[1][3], keepOpen ? 'popup' : 'resting');
+        });
+        if (keepOpen) {
+          vm.runInContext('settleEdgeLayout()', openedDrag.sandbox);
+          await sleep(15);
+          check(`贴边布局调整仍保留展开尺寸(${finish})`, () => {
+            assert(!openedDrag.elements('peek').classList.contains('hidden'));
+            const sizes = openedDrag.calls.filter(([name]) => name === 'setPetSize');
+            assert.strictEqual(sizes.at(-1)[1][3], 'popup');
+          });
+          openedDrag.elements('peek-close').dispatch('click');
+          check(`拖动后X仍可关闭(${finish})`, () => assert(openedDrag.elements('peek').classList.contains('hidden')));
+        }
+      }
+    }
+
+    const capsuleDrag = world();
+    capsuleDrag.handlers.companionState({ keepWorkPeekOpen: true });
+    capsuleDrag.elements('peek').classList.add('hidden');
+    capsuleDrag.handlers.stats(working);
+    capsuleDrag.window.screenX = 100;
+    capsuleDrag.window.screenY = 100;
+    vm.runInContext('catVisible = false; openPeek()', capsuleDrag.sandbox);
+    const capsule = capsuleDrag.elements('chip');
+    capsule.dispatch('pointerdown', { button: 0, pointerId: 10, screenX: 110, screenY: 110, clientX: 10, clientY: 10 });
+    capsule.dispatch('pointermove', { button: 0, pointerId: 10, screenX: 140, screenY: 140, clientX: 40, clientY: 40 });
+    capsule.dispatch('pointerup', { button: 0, pointerId: 10, screenX: 140, screenY: 140, clientX: 40, clientY: 40 });
+    await sleep(20);
+    check('隐藏头像后拖动胶囊也保持速览', () => assert(!capsuleDrag.elements('peek').classList.contains('hidden')));
+    capsule.dispatch('pointerdown', { button: 0, pointerId: 11, screenX: 140, screenY: 140, clientX: 40, clientY: 40 });
+    capsule.dispatch('pointermove', { button: 0, pointerId: 11, screenX: 160, screenY: 140, clientX: 60, clientY: 40 });
+    capsule.dispatch('pointerup', { button: 0, pointerId: 11, screenX: 160, screenY: 140, clientX: 60, clientY: 40 });
+    capsuleDrag.elements('peek-close').dispatch('click');
+    await sleep(20);
+    check('松手后立即X关闭不会被异步布局重新打开', () => assert(capsuleDrag.elements('peek').classList.contains('hidden')));
 
     const cancelledWorld = world();
     cancelledWorld.elements('peek').classList.add('hidden');
